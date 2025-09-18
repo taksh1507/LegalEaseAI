@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/LegalEaseAI/static/css/main.108f2381.css",
+    "main.js": "/LegalEaseAI/static/js/main.73877e78.js",
+    "index.html": "/LegalEaseAI/index.html",
+    "main.108f2381.css.map": "/LegalEaseAI/static/css/main.108f2381.css.map",
+    "main.73877e78.js.map": "/LegalEaseAI/static/js/main.73877e78.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.108f2381.css",
+    "static/js/main.73877e78.js"
+  ]
+}
