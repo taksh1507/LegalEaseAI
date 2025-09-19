@@ -1,0 +1,82 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply font-inter;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+  }
+  
+  .btn-secondary {
+    @apply bg-accent-100 hover:bg-accent-200 text-accent-700 font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2;
+  }
+  
+  .dark .btn-secondary {
+    @apply bg-accent-800 hover:bg-accent-700 text-accent-200;
+  }
+  
+  .card {
+    @apply bg-white dark:bg-accent-800 border border-accent-200 dark:border-accent-700 rounded-lg shadow-sm;
+  }
+  
+  .input-field {
+    @apply w-full px-3 py-2 border border-accent-300 dark:border-accent-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-accent-800 text-accent-900 dark:text-accent-100 placeholder-accent-500 dark:placeholder-accent-400;
+  }
+  
+  .chat-bubble-user {
+    @apply bg-primary-500 text-white rounded-2xl rounded-tr-md px-4 py-2 max-w-xs ml-auto;
+  }
+  
+  .chat-bubble-ai {
+    @apply bg-accent-100 dark:bg-accent-700 text-accent-900 dark:text-accent-100 rounded-2xl rounded-tl-md px-4 py-2 max-w-xs;
+  }
+  
+  .auth-button {
+    @apply px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+  
+  .auth-button-primary {
+    @apply auth-button bg-primary-600 hover:bg-primary-700 text-white focus:ring-primary-500;
+  }
+  
+  .auth-button-secondary {
+    @apply auth-button text-accent-600 dark:text-accent-300 hover:text-accent-900 dark:hover:text-accent-100 hover:bg-accent-100 dark:hover:bg-accent-800 focus:ring-accent-500;
+  }
+  
+  .modal-backdrop {
+    @apply fixed inset-0 bg-black bg-opacity-50 z-50;
+    backdrop-filter: blur(2px);
+  }
+  
+  .modal-container {
+    @apply flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto min-h-screen;
+  }
+  
+  .modal-content {
+    @apply bg-white dark:bg-accent-900 rounded-lg shadow-2xl w-full mx-auto my-4 sm:my-8;
+    animation: slideUpModal 0.3s ease-out;
+  }
+}
+
+@keyframes slideUpModal {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
