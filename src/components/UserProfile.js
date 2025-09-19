@@ -57,7 +57,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout, onUserUpdate }) => {
     if (/\d/.test(password)) score += 1;
     else feedback.push('Add numbers');
     
-    if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/.test(password)) score += 1;
+    if (/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) score += 1;
     else feedback.push('Add special characters');
     
     let strength = 'Very Weak';
