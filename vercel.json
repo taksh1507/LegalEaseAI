@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "src/index.js",
+      "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
         "distDir": "build"
@@ -20,15 +20,10 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/src/index.html"
+      "dest": "/index.html"
     }
   ],
   "env": {
     "NODE_ENV": "production"
-  },
-  "build": {
-    "env": {
-      "REACT_APP_API_URL": "https://your-app-name.vercel.app/api"
-    }
   }
 }
