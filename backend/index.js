@@ -10,7 +10,12 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'], // Add your frontend URLs
+  origin: [
+    'http://localhost:3000', 
+    'http://localhost:3001',
+    'https://taksh1507.github.io',
+    'https://legaleaseai-zeuw.onrender.com'
+  ],
   credentials: true
 }));
 
