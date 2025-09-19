@@ -47,6 +47,7 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+        status: 200
 
 databases:
   # Optional: If you want to use Render's PostgreSQL instead of Neon
