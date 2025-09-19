@@ -7,5 +7,7 @@ echo "🚀 Starting LegalEaseAI Backend deployment..."
 echo "📦 Installing dependencies..."
 npm install
 
-echo "✅ Backend deployment completed!"
-echo "🌐 Backend will be available at: https://legaleaseai-backend.onrender.com"
+echo "✅ Backend build completed!"
+echo "🌐 Backend will be available at the Render-provided URL"
+echo "🔍 Health check endpoint: /health"
+echo "📡 API endpoints: /api/auth/*"
