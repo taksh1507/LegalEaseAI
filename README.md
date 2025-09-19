@@ -2,6 +2,8 @@
 
 A responsive, professional frontend web application that allows users to upload complex legal documents and receive AI-generated summaries, clause explanations, chatbot interaction, and risk flags.
 
+<!-- Deployment update: Fixed Vercel configuration -->
+
 ## Features
 
 - 📄 **Document Upload**: Support for PDF and DOCX files or direct text input
