@@ -2,6 +2,7 @@
   "name": "legalease-ai",
   "version": "1.0.0",
   "description": "AI-powered legal document analysis tool",
+  "homepage": "https://taksh1507.github.io/LegalEaseAI",
   "private": true,
   "dependencies": {
     "@heroicons/react": "^2.0.18",
