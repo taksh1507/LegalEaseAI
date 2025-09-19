@@ -13,8 +13,7 @@ app.use(cors({
   origin: [
     'http://localhost:3000', 
     'http://localhost:3001',
-    'https://taksh1507.github.io',
-    'https://legaleaseai-zeuw.onrender.com'
+    'https://taksh1507.github.io'
   ],
   credentials: true
 }));

@@ -1,5 +1,5 @@
 // API Configuration and utilities for LegalEaseAI Authentication
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://legaleaseai-backend.onrender.com';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 class AuthAPI {
   constructor() {
