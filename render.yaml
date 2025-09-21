@@ -1,0 +1,51 @@
+services:
+  # PostgreSQL Database
+  - type: pserv
+    name: legalease-db
+    env: postgresql
+    plan: free
+    
+  # Backend API Service
+  - type: web
+    name: legalease-backend
+    env: node
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: legalease-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false  # Set manually in dashboard
+      - key: SMTP_PASS
+        sync: false  # Set manually in dashboard
+      - key: OPENAI_ROUTER_KEY
+        sync: false  # Set manually in dashboard
+
+  # Frontend Static Site
+  - type: web
+    name: legalease-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./build
+    plan: free
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          type: web
+          name: legalease-backend
+          property: host
