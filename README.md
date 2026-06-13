@@ -1,133 +1,147 @@
-# LegalEaseAI — AI-Powered Legal Document Analyzer
+# LegalEaseAI
 
-LegalEaseAI is a responsive, professional full-stack web application that allows users to upload complex legal documents (PDF/Word/Text) and receive AI-generated summaries, clause-by-clause explanations, risk detection (red flags), and chat widget interaction powered by an LLM (Gemini / OpenRouter).
+> **Advanced Full-Stack Legal Document Analyzer & Conversational Assistant**
 
----
-
-## Key Features
-
-- 📄 **Document Upload**: Support for PDF and DOCX file processing, or pasting text directly.
-- 🤖 **AI-Powered Analysis**: Delivers comprehensive summaries, clause-by-clause breakdowns (risk levels, plain-English explanations), and favorability assessments.
-- ⚠️ **Red Flag Detection**: Identifies potentially problematic terms with actionable recommendations and consequences.
-- 💬 **AI Chat Assistant**: Interactive contextual chat assistant allowing users to ask questions about uploaded agreements.
-- 🌙 **Modern Premium UI**: Built with responsive layouts, dark/light theme support, smooth micro-animations, and full-screen preview modals.
+LegalEaseAI is an enterprise-grade legal document analysis platform. It leverages state-of-the-art Large Language Models (LLMs) to ingest complex contracts, leases, and agreements, extract key clauses, detect risk factors, and provide plain-English explanations. The application features an interactive chatbot that allows users to converse directly with their documents in a secure, contextual sandbox.
 
 ---
 
-## Tech Stack
+## 🌟 Key Capabilities
 
-### Frontend
-- **Framework**: React.js 18
-- **Styling**: Tailwind CSS 3.3
-- **Animations**: Framer Motion
-- **Icons**: Heroicons
-- **Helper Tools**: `jspdf` & `html2canvas` (for document preview and PDF generation)
-
-### Backend
-- **Framework**: Node.js & Express
-- **LLM Integrations**: 
-  - **Google Gemini (Direct SDK)**: Supports **Gemini 1.5 Flash** (recommended for speed & cost) and **Gemini 1.5 Pro** (for advanced analysis & reasoning).
-  - **OpenRouter (API)**: Supports unified integration with models like **OpenAI GPT-4o-mini**, **GPT-4o**, and **Meta Llama 3**.
-- **Database**: PostgreSQL (Neon Serverless)
-- **Authentication**: Email OTP verification (with temporary local storage token validation)
-- **File Parsing**: `pdf-parse` (PDF) and `mammoth` (DOCX Word docs)
+* **Intelligent Document Parsing**: Automatically extracts readable text from **PDF** and **Word (DOCX)** documents, as well as raw text inputs.
+* **Semantic Analysis & Clause Extraction**: Analyzes agreements at the clause level to detail original text, plain-language explanations, risk assessment levels (`Low`, `Medium`, `High`), and custom negotiation suggestions.
+* **Proactive Red Flag Detection**: Isolates critical issues, liability exposures, and unfavorable terms with severity warnings, potential consequences, and actionable recommendations.
+* **Contextual AI Chatbot**: A chat interface that maintains state and utilizes document content to answer specific follow-up questions, define legal jargon, and simulate negotiation scenarios.
+* **Secure Document Chunking**: Pre-processes massive documents by identifying legal section boundaries (e.g., `ARTICLE`, `SECTION`, `WHEREAS`), ensuring long documents fit within model limits without losing context.
+* **Interactive Document Preview & PDF Export**: Generates professional PDF summaries and structured reports directly from the web interface.
 
 ---
 
-## Project Structure
+## 🛠️ Tech Stack & Architecture
+
+### Frontend Architecture
+* **Library**: React 18
+* **Styling**: Tailwind CSS (Premium Dark/Light mode support)
+* **Animations**: Framer Motion (Fluid transitions and micro-interactions)
+* **Client-Side Export**: `html2canvas` & `jspdf` for high-fidelity PDF generation
+
+### Backend & AI Infrastructure
+* **Framework**: Node.js & Express
+* **Database**: PostgreSQL (Neon Serverless Integration)
+* **Auth & Security**: Email OTP (One-Time Password) generation, JWT tokenization, and bcrypt secure hashing
+* **Parsing Utilities**: `pdf-parse` (for PDF text extractions) and `mammoth` (for DOCX extraction)
+* **LLM Providers**:
+  * **Google Gemini (Direct SDK)**: Native integration using `@google/generative-ai` supporting **Gemini 1.5 Flash** (high speed, cost-effective) and **Gemini 1.5 Pro** (advanced reasoning).
+  * **OpenRouter (API)**: Unified router access supporting **OpenAI GPT-4o-mini**, **GPT-4o**, and **Meta Llama 3**.
+
+---
+
+## 📂 Repository Structure
 
 ```text
 LegalEaseAI/
-├── src/                    # React Frontend Code
-│   ├── components/         # Reusable UI Components
-│   │   ├── ChatWidget.js        # Floating AI chat assistant
-│   │   ├── ClauseAccordion.js   # Clause-by-clause risk breakdown
-│   │   ├── Footer.js            # Footer with disclaimers
-│   │   ├── EnhancedAuthModal.js # OTP & password-based sign-in/up
-│   │   ├── InfoModal.js         # Informational policy modals
-│   │   ├── ModalContent.js      # Terms, privacy, cookie policy content
-│   │   ├── Navbar.js            # Navigation bar with dark mode toggle
-│   │   ├── PDFPreviewModal.js   # PDF viewer modal
-│   │   ├── PDFTemplate.js       # Printable layout template
-│   │   ├── RedFlagSidebar.js    # Sidebar showing severity indicators
-│   │   ├── ResultsSection.js    # Multi-tab analysis results panel
-│   │   ├── SummaryCard.js       # Executive summary & key points card
-│   │   └── UploadSection.js     # Drag-and-drop file uploader
-│   ├── services/           # Frontend Client Services
-│   │   ├── BackendPDFAPI.js     # PDF export backend caller
-│   │   └── PDFService.js        # PDF design and generator helper
-│   ├── App.js              # Application entry, state & routes
-│   ├── index.js            # React mounting hook
-│   └── index.css           # Styling overrides & Tailwind declarations
+├── src/                        # React Frontend Application
+│   ├── components/             # UI Components
+│   │   ├── ChatWidget.js            # Floating conversational assistant
+│   │   ├── ClauseAccordion.js       # Clause-by-clause analysis collapse component
+│   │   ├── EnhancedAuthModal.js     # OTP and credential sign-in/up modal
+│   │   ├── Footer.js                # Footer layout with legal disclaimers
+│   │   ├── InfoModal.js             # Info modal wrapper for policy contents
+│   │   ├── ModalContent.js          # Raw HTML/Markdown policies (Privacy, Terms)
+│   │   ├── Navbar.js                # Top navigation header with dark mode toggle
+│   │   ├── PDFPreviewModal.js       # Export and print preview portal
+│   │   ├── PDFTemplate.js           # Print-friendly layout template
+│   │   ├── RedFlagSidebar.js        # Severe risk item sidebar
+│   │   ├── ResultsSection.js        # Main document results panel
+│   │   ├── SummaryCard.js           # Executive summary & quick stats display
+│   │   └── UploadSection.js         # File drag-and-drop / raw text uploader
+│   ├── services/               # Client-Side Service Handlers
+│   │   ├── BackendPDFAPI.js         # Backend PDF converter connector
+│   │   └── PDFService.js            # Client-side PDF formatting
+│   ├── App.js                  # App controller, context providers & routing
+│   ├── index.js                # DOM mount entrypoint
+│   └── index.css               # Global tailwind imports & CSS variables
 │
-├── backend/                # Node.js Express Backend Code
-│   ├── config/             # Config variables (Postgres Pool)
-│   ├── controllers/        # Express route controllers (auth, history)
-│   ├── database/           # DB schema initialization
-│   ├── middleware/         # Auth verification middleware
-│   ├── migrations/         # PostgreSQL table creation scripts
-│   ├── routes/             # API routes (auth, chat, document, pdf)
-│   ├── services/           # Service layer (AI, email, OTP generation)
-│   ├── utils/              # Helper utilities (chunking, prompts)
-│   ├── index.js            # Express entry point
-│   └── package.json        # Backend dependencies
-│
-└── package.json            # Root configuration
+├── backend/                    # Node.js Express API Server
+│   ├── config/                 # Configurations (PostgreSQL Pool)
+│   ├── controllers/            # Controller layer (auth, history controllers)
+│   ├── database/               # Init scripts and database schema files
+│   ├── middleware/             # Express middlewares (JWT Authenticator)
+│   ├── migrations/             # SQL database table migration configurations
+│   ├── routes/                 # Express Router files
+│   ├── services/               # Core services (AI generation, Email, Twilio OTP)
+│   ├── utils/                  # Utility functions (Smart chunker, prompts)
+│   └── index.js                # Main server entrypoint
 ```
 
 ---
 
-## Getting Started
+## ⚙️ Setup and Installation
 
 ### 1. Prerequisites
-- **Node.js**: (v18+ recommended)
-- **PostgreSQL**: (Optional; required for database history features)
+Ensure you have the following installed on your machine:
+* **Node.js** (v18.x or higher)
+* **npm** (v9.x or higher)
+* **PostgreSQL Database** (Optional: required only for document history preservation)
 
-### 2. Environment Setup
-
-Create a `.env` file inside the `backend` directory based on `backend/.env.production.template`:
+### 2. Environment Variables Configuration
+Configure your backend environment. Create a `.env` file in the `/backend` directory based on the template:
 
 ```env
 PORT=5000
 NODE_ENV=development
-DATABASE_URL=your_postgresql_database_url
-JWT_SECRET=your_jwt_secret_key
-SMTP_USER=your_gmail_address
+
+# Database Configuration (PostgreSQL)
+DATABASE_URL=postgresql://<username>:<password>@<host>:<port>/<database>
+
+# JWT Authentication
+JWT_SECRET=your_strong_jwt_secret_key
+
+# SMTP Credentials (For OTP Emails)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
 SMTP_PASS=your_gmail_app_password
 
-# LLM API Keys (Provide at least one)
+# LLM Providers Configuration (Configure at least one)
 OPENAI_ROUTER_KEY=your_openrouter_api_key
 GEMINI_API_KEY=your_google_gemini_api_key
 ```
 
-### 3. Installation & Start
+### 3. Installation
+Install all package dependencies for the root, frontend, and backend components automatically:
+```bash
+npm run install-all
+```
 
-From the root directory of the project, run:
+### 4. Running Locally
+Run both the frontend client and the backend server concurrently in development mode:
+```bash
+npm run dev
+```
 
-1. **Install all dependencies** (installs both root, frontend, and backend packages):
-   ```bash
-   npm run install-all
-   ```
-
-2. **Start the development server** (runs both frontend and backend concurrently):
-   ```bash
-   npm run dev
-   ```
-   - Frontend runs on: `http://localhost:3000`
-   - Backend runs on: `http://localhost:5000`
-
----
-
-## API Endpoints
-
-- **Auth**: `POST /api/auth/send-otp`, `POST /api/auth/verify-otp`
-- **Analysis**: `POST /api/document/analyze-file`, `POST /api/document/analyze-text`
-- **Chat**: `POST /api/document/chat`
-- **History**: `GET /api/document-history`
-- **PDF Generation**: `POST /api/pdf/generate`
+* **Frontend Application**: `http://localhost:3000`
+* **Backend Server API**: `http://localhost:5000`
 
 ---
 
-## Legal Considerations
+## 📡 Backend API Reference
 
-⚠️ **Disclaimer**: LegalEaseAI provides AI-generated analysis for educational and helper purposes only. It does not constitute professional legal advice and should not replace consultation with qualified legal counsel.
+### Authentication
+* `POST /api/auth/send-otp` - Dispatch email verification code.
+* `POST /api/auth/verify-otp` - Validate OTP and generate a JWT access token.
+
+### Document Management & Analysis
+* `POST /api/document/analyze-file` - Upload file (PDF, DOCX) via multipart/form-data for full AI analysis.
+* `POST /api/document/analyze-text` - Analyze raw pasted text.
+* `POST /api/document/chat` - Interact with the current document using the conversational chatbot.
+* `GET /api/document-history` - Retreive the current user's document history list.
+
+### Document Export
+* `POST /api/pdf/generate` - Generate formatted export documents.
+
+---
+
+## ⚠️ Disclaimer
+
+LegalEaseAI provides AI-generated contract summaries, insights, and risk assessments for **educational and helper purposes only**. It does not constitute professional legal advice, nor does it create an attorney-client relationship. Always consult a qualified attorney for formal legal matters.
