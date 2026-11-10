@@ -1,5 +1,11 @@
 # LegalEaseAI
 
+[![Frontend: React](https://img.shields.io/badge/frontend-React%2018-61DAFB?logo=react&logoColor=white)](src)
+[![Backend: Node.js + Express](https://img.shields.io/badge/backend-Node.js%20Express-339933?logo=nodedotjs&logoColor=white)](backend)
+[![Database: PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)](backend/database)
+[![LLM: Gemini + OpenRouter](https://img.shields.io/badge/LLM-Gemini%20%7C%20OpenRouter-4285F4?logo=google&logoColor=white)](backend/services)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > **Advanced Full-Stack Legal Document Analyzer & Conversational Assistant**
 
 LegalEaseAI is an enterprise-grade legal document analysis platform. It leverages state-of-the-art Large Language Models (LLMs) to ingest complex contracts, leases, and agreements, extract key clauses, detect risk factors, and provide plain-English explanations. The application features an interactive chatbot that allows users to converse directly with their documents in a secure, contextual sandbox.
@@ -35,6 +41,38 @@ LegalEaseAI is an enterprise-grade legal document analysis platform. It leverage
   * **OpenRouter (API)**: Unified router access supporting **OpenAI GPT-4o-mini**, **GPT-4o**, and **Meta Llama 3**.
 
 ---
+
+## Architecture Overview
+
+```mermaid
+flowchart TB
+    subgraph Client["Client (React frontend)"]
+        UI["UploadSection · ChatWidget · Results<br/>PDFPreviewModal · Navbar"]
+    end
+
+    subgraph API["Backend (Node.js + Express)"]
+        Routes["Express routes<br/>(/api/auth, /api/document,<br/>/api/chat, /api/pdf)"]
+        Auth["JWT auth + Email OTP<br/>(bcrypt, nodemailer, twilio)"]
+    end
+
+    subgraph AI["AI & parsing layer"]
+        LLM["Gemini 1.5 Flash/Pro<br/>OpenRouter (GPT-4o, Llama 3)"]
+        Parser["pdf-parse · mammoth<br/>(PDF / DOCX extraction)"]
+        Chunker["Smart legal chunker<br/>(ARTICLE / SECTION / WHEREAS)"]
+    end
+
+    subgraph Store["Data store"]
+        PG[("PostgreSQL (Neon)<br/>document history + users")]
+    end
+
+    UI --> Routes
+    Routes --> Auth
+    Auth --> LLM
+    LLM --> Parser
+    Parser --> Chunker
+    Chunker --> PG
+    API --> PG
+```
 
 ## 📂 Repository Structure
 
@@ -139,6 +177,23 @@ npm run dev
 
 ### Document Export
 * `POST /api/pdf/generate` - Generate formatted export documents.
+
+## ✅ Verification Status
+
+Verified in this audit:
+
+| Check | Result |
+| --- | --- |
+| Backend `npm ci` | PASS |
+| Backend smoke (`node index.js`, limited mode, no DB) | `GET /` 200, `GET /health` 200 — server starts and degrades gracefully without `DATABASE_URL` |
+| Frontend `npm ci` | PASS |
+| Frontend `npm run build` | PASS — production `build/` output generated |
+
+Fixes applied to unblock the production build:
+- Removed unused icon imports (`PDFTemplate.js`: `ClockIcon`, `ScaleIcon`, `ExclamationTriangleIcon`, `CheckCircleIcon`; `PDFPreviewModal.js`: `Cog6ToothIcon`; `SummaryCard.js`: `PrinterIcon`; `Navbar.js`: unused `useEffect`)
+- Removed dead function `handleSwitchAuthMode` (`App.js`)
+
+Note: with `CI=true` forced, `react-scripts build` elevates two pre-existing warnings to errors (unused `handleSwitchAuthMode` — removed; `useEffect` exhaustive-deps in `ChatWidget.js`). The repo has no CI workflow; the standard `npm run build` passes. The `ChatWidget.js` hook dependency was left untouched because adding it "by the book" risks a render loop (the effect writes to state it reads).
 
 ---
 

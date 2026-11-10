@@ -1,10 +1,4 @@
 import React from 'react';
-import { 
-  ClockIcon,
-  ScaleIcon,
-  ExclamationTriangleIcon,
-  CheckCircleIcon
-} from '@heroicons/react/24/outline';
 
 const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
   const {

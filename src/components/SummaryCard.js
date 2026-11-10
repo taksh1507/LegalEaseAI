@@ -4,8 +4,7 @@ import {
   CheckCircleIcon,
   ClockIcon,
   ScaleIcon,
-  DocumentTextIcon,
-  PrinterIcon
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 
 const SummaryCard = ({ summary = {}, analysisData = {}, onPDFExport = null }) => {

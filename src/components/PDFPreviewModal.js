@@ -3,7 +3,6 @@ import {
   XMarkIcon, 
   DocumentArrowDownIcon,
   EyeIcon,
-  Cog6ToothIcon,
   CloudIcon
 } from '@heroicons/react/24/outline';
 import PDFTemplate from './PDFTemplate';

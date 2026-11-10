@@ -361,11 +361,6 @@ function App() {
     console.log('✅ User logged out successfully');
   };
 
-  const handleSwitchAuthMode = () => {
-    setAuthMode(authMode === 'login' ? 'signup' : 'login');
-  };
-
-
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-accent-50 to-accent-100 dark:from-accent-900 dark:to-accent-800 transition-colors duration-300`}>
