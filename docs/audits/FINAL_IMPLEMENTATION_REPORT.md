@@ -32,4 +32,4 @@ Node/Express backend and React frontend. Authentication middleware silently trus
 
 No database migration, dependency upgrades, deployment or measured performance optimization was performed. Registry dependency advisories remain unresolved. Authentication failure behavior intentionally changes from granting access to returning 503 during outages. This is an initial remediation pass; a complete security assessment and UI modernization remain outstanding.
 
-Pull request: pending creation.
+Pull request: https://github.com/taksh1507/LegalEaseAI/pull/1
