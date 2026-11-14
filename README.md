@@ -200,3 +200,16 @@ Note: with `CI=true` forced, `react-scripts build` elevates two pre-existing war
 ## ⚠️ Disclaimer
 
 LegalEaseAI provides AI-generated contract summaries, insights, and risk assessments for **educational and helper purposes only**. It does not constitute professional legal advice, nor does it create an attorney-client relationship. Always consult a qualified attorney for formal legal matters.
+## Authentication regression tests
+
+```bash
+cd backend
+npm install --ignore-scripts
+npm test
+```
+
+The tests inject database results and use a test-only JWT key. Protected routes
+require successful database verification; unavailable authentication storage now
+returns HTTP 503. Optional authentication remains anonymous during lookup errors.
+PostgreSQL connections to Neon verify server certificates. Configure valid TLS
+and database settings before rollout; see `docs/audits/` for results and limits.

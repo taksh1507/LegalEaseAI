@@ -19,11 +19,8 @@ const authenticateToken = async (req, res, next) => {
     // Verify the JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // If database is not available, just use token data
     if (!pool) {
-      req.user = { id: decoded.userId, email: decoded.email };
-      req.userId = decoded.userId;
-      return next();
+      return res.status(503).json({ success: false, message: 'Authentication service unavailable' });
     }
 
     // Get user details from database
@@ -40,14 +37,7 @@ const authenticateToken = async (req, res, next) => {
       }
     } catch (dbError) {
       console.error('Database query error in auth middleware:', dbError);
-      // If database is unavailable, fall back to token data
-      req.user = {
-        id: decoded.userId,
-        email: decoded.email,
-        name: decoded.name || 'User'
-      };
-      req.userId = decoded.userId;
-      return next();
+      return res.status(503).json({ success: false, message: 'Authentication service unavailable' });
     }
 
     // Attach user info to request
@@ -111,13 +101,8 @@ const optionalAuth = async (req, res, next) => {
       }
     } catch (dbError) {
       console.error('Database query error in optional auth:', dbError);
-      // If database is unavailable, use token data
-      req.user = {
-        id: decoded.userId,
-        email: decoded.email,
-        name: decoded.name || 'User'
-      };
-      req.userId = decoded.userId;
+      req.user = null;
+      req.userId = null;
     }
 
     next();

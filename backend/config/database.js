@@ -12,7 +12,7 @@ if (!databaseUrl) {
   // Create PostgreSQL pool
   const pool = new Pool({
     connectionString: databaseUrl,
-    ssl: databaseUrl.includes('neon.tech') ? { rejectUnauthorized: false } : false
+    ssl: databaseUrl.includes('neon.tech') ? { rejectUnauthorized: true } : false
   });
 
   // Test connection

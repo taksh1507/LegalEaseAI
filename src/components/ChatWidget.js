@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   ChatBubbleLeftRightIcon,
   XMarkIcon,
@@ -26,14 +26,7 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
     }
   }, []);
 
-  // Save current chat to history when messages change
-  useEffect(() => {
-    if (messages.length > 1 && currentChatId) { // Only save if there are actual conversations
-      saveChatToHistory();
-    }
-  }, [messages]);
-
-  const saveChatToHistory = () => {
+  const saveChatToHistory = useCallback(() => {
     if (!isAuthenticated || messages.length <= 1) return;
 
     const chatTitle = messages[1]?.text?.substring(0, 50) + '...' || 'New Chat';
@@ -45,19 +38,22 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
       messageCount: messages.length
     };
 
-    const updatedHistory = chatHistory.filter(chat => chat.id !== chatData.id);
-    updatedHistory.unshift(chatData);
-    
-    // Keep only last 20 chats
-    const limitedHistory = updatedHistory.slice(0, 20);
-    
-    setChatHistory(limitedHistory);
-    localStorage.setItem('legalease-chat-history', JSON.stringify(limitedHistory));
-    
+    setChatHistory(history => [chatData, ...history.filter(chat => chat.id !== chatData.id)].slice(0, 20));
+
     if (!currentChatId) {
       setCurrentChatId(chatData.id);
     }
-  };
+  }, [currentChatId, isAuthenticated, messages]);
+
+  useEffect(() => {
+    if (messages.length > 1 && currentChatId) saveChatToHistory();
+  }, [messages, currentChatId, saveChatToHistory]);
+
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      localStorage.setItem('legalease-chat-history', JSON.stringify(chatHistory));
+    }
+  }, [chatHistory]);
 
   const startNewChat = () => {
     if (!isAuthenticated) {
