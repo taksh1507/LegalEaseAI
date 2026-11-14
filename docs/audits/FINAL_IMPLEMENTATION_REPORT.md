@@ -14,7 +14,7 @@ Node/Express backend and React frontend. Authentication middleware silently trus
 - Retain normal verified-user access and deleted-user rejection.
 - Enable certificate verification for Neon PostgreSQL connections.
 - Use a stable chat-saving callback and functional history updates; persist history separately so hook dependencies can be declared without triggering an update loop.
-- Add five middleware regressions and replace the placeholder backend test command with Node's test runner.
+- Add five middleware regressions, replace the placeholder backend test command with Node's test runner, and add a read-only GitHub Actions job that installs with lifecycle scripts disabled and runs them.
 - Add initial, security and implementation audit documents.
 
 ## Verification
@@ -28,6 +28,7 @@ Node/Express backend and React frontend. Authentication middleware silently trus
 
 `backend/middleware/auth.js`, `backend/config/database.js`,
 `backend/tests/auth.test.js`, `backend/package.json`,
+`.github/workflows/backend-security-tests.yml`,
 `src/components/ChatWidget.js`, `README.md`, and `docs/audits/`.
 
 No database migration, dependency upgrades, deployment or measured performance optimization was performed. Registry dependency advisories remain unresolved. Authentication failure behavior intentionally changes from granting access to returning 503 during outages. This is an initial remediation pass; a complete security assessment and UI modernization remain outstanding.
