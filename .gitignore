@@ -111,3 +111,9 @@ test-history.js
 # Backup files
 *_old.js
 *_backup.js
+# Local verification artifacts
+/test-results/
+/playwright-report/
+/backend/.env
+.env.local
+.env.*.local

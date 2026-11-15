@@ -1,139 +1,196 @@
 const puppeteer = require('puppeteer');
-const htmlPdf = require('html-pdf-node');
-const fs = require('fs').promises;
-const path = require('path');
+const httpError = require('../utils/httpError');
+const { integerSetting } = require('../config/security');
+let activeRenders = 0;
+
+function escapeText(value, depth = 0, count = { value: 0 }) {
+  if (depth > 12 || ++count.value > 10000) throw httpError(413, 'Report structure is too large');
+  if (typeof value === 'string')
+    return value.replace(
+      /[&<>"']/g,
+      (character) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character],
+    );
+  if (Array.isArray(value)) return value.map((item) => escapeText(item, depth + 1, count));
+  if (value && typeof value === 'object' && !(value instanceof Date))
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, escapeText(item, depth + 1, count)]),
+    );
+  return value;
+}
+function validateReport(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data))
+    throw httpError(400, 'Document data is required');
+  for (const key of ['fileName', 'overallRiskLevel'])
+    if (data[key] !== undefined && typeof data[key] !== 'string')
+      throw httpError(400, `Invalid ${key}`);
+  for (const key of ['summary', 'favorability'])
+    if (
+      data[key] !== undefined &&
+      (!data[key] || typeof data[key] !== 'object' || Array.isArray(data[key]))
+    )
+      throw httpError(400, `Invalid ${key}`);
+  for (const key of ['clauses', 'redFlags']) {
+    if (data[key] !== undefined && (!Array.isArray(data[key]) || data[key].length > 500))
+      throw httpError(400, `Invalid ${key}`);
+    for (const item of data[key] || []) {
+      if (!item || typeof item !== 'object' || Array.isArray(item))
+        throw httpError(400, `Invalid ${key} entry`);
+      for (const field of [
+        'title',
+        'originalText',
+        'explanation',
+        'riskLevel',
+        'riskAssessment',
+        'legalImplications',
+        'negotiationPoints',
+        'importance',
+        'issue',
+        'severity',
+        'potentialConsequences',
+        'recommendations',
+      ])
+        if (item[field] !== undefined && typeof item[field] !== 'string')
+          throw httpError(400, `Invalid report field: ${field}`);
+      if (
+        item.keyTerms !== undefined &&
+        (!Array.isArray(item.keyTerms) || !item.keyTerms.every((term) => typeof term === 'string'))
+      )
+        throw httpError(400, 'Invalid clause key terms');
+    }
+  }
+  for (const key of ['recommendations', 'missingClauses'])
+    if (
+      data[key] !== undefined &&
+      (!Array.isArray(data[key]) || !data[key].every((item) => typeof item === 'string'))
+    )
+      throw httpError(400, `Invalid ${key}`);
+  if (
+    data.summary?.keyPoints !== undefined &&
+    (!Array.isArray(data.summary.keyPoints) ||
+      !data.summary.keyPoints.every((item) => typeof item === 'string'))
+  )
+    throw httpError(400, 'Invalid summary key points');
+  for (const [object, keys] of [
+    [data.summary, ['title', 'description']],
+    [data.favorability, ['forParty1', 'forParty2', 'explanation']],
+  ])
+    for (const key of keys)
+      if (object?.[key] !== undefined && typeof object[key] !== 'string')
+        throw httpError(400, `Invalid report field: ${key}`);
+  if (data.processedAt !== undefined && Number.isNaN(new Date(data.processedAt).getTime()))
+    throw httpError(400, 'Invalid report date');
+}
+
+function safeOptions(options) {
+  if (!options || typeof options !== 'object' || Array.isArray(options))
+    throw httpError(400, 'Invalid PDF options');
+  const allowed = new Set(['method', 'format', 'landscape', 'scale', 'fileName']);
+  for (const key of Object.keys(options))
+    if (!allowed.has(key)) throw httpError(400, `Unsupported PDF option: ${key}`);
+  if (options.method && !['puppeteer', 'html-pdf-node'].includes(options.method))
+    throw httpError(400, 'Unsupported PDF method');
+  if (options.format && !['A4', 'Letter', 'Legal'].includes(options.format))
+    throw httpError(400, 'Unsupported paper format');
+  if (options.landscape !== undefined && typeof options.landscape !== 'boolean')
+    throw httpError(400, 'Invalid page orientation');
+  if (
+    options.scale !== undefined &&
+    (typeof options.scale !== 'number' || options.scale < 0.5 || options.scale > 1.5)
+  )
+    throw httpError(400, 'Invalid PDF scale');
+  return {
+    format: options.format || 'A4',
+    landscape: options.landscape || false,
+    scale: options.scale || 1,
+  };
+}
 
 class BackendPDFService {
-  /**
-   * Generate PDF using Puppeteer for high-quality output
-   */
   static async generatePDFWithPuppeteer(htmlContent, options = {}) {
-    let browser = null;
-    
+    if (activeRenders >= integerSetting('PDF_MAX_CONCURRENCY', 2, 1, 4))
+      throw httpError(503, 'Report renderer is busy. Please retry.');
+    activeRenders += 1;
+    let browser;
     try {
-      // Launch browser
       browser = await puppeteer.launch({
         headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
-          '--disable-gpu'
-        ]
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        args:
+          process.env.PDF_DISABLE_SANDBOX === 'true'
+            ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+            : [],
+        timeout: 15000,
       });
-
       const page = await browser.newPage();
-      
-      // Set content and wait for any images/fonts to load
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      
-      // Configure PDF options
-      const pdfOptions = {
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '1cm',
-          right: '1cm',
-          bottom: '1cm',
-          left: '1cm'
-        },
-        ...options
-      };
-      
-      // Generate PDF buffer
-      const pdfBuffer = await page.pdf(pdfOptions);
-      
-      return {
-        success: true,
-        buffer: pdfBuffer,
-        size: pdfBuffer.length
-      };
-      
-    } catch (error) {
-      console.error('Puppeteer PDF generation error:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      await page.setJavaScriptEnabled(false);
+      await page.setRequestInterception(true);
+      page.on('request', (request) => request.abort());
+      await page.setContent(htmlContent, { waitUntil: 'domcontentloaded', timeout: 10000 });
+      const buffer = Buffer.from(
+        await page.pdf({
+          ...options,
+          printBackground: true,
+          margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' },
+          timeout: 30000,
+        }),
+      );
+      return { success: true, buffer, size: buffer.length };
+    } catch {
+      throw httpError(503, 'PDF renderer unavailable. Please retry later.');
     } finally {
-      if (browser) {
-        await browser.close();
-      }
+      activeRenders -= 1;
+      if (browser) await browser.close();
     }
   }
 
-  /**
-   * Generate PDF using html-pdf-node (lighter alternative)
-   */
-  static async generatePDFWithHtmlPdfNode(htmlContent, options = {}) {
-    try {
-      const file = { content: htmlContent };
-      
-      const pdfOptions = {
-        format: 'A4',
-        margin: {
-          top: '1cm',
-          right: '1cm',
-          bottom: '1cm',
-          left: '1cm'
-        },
-        printBackground: true,
-        ...options
-      };
-      
-      const pdfBuffer = await htmlPdf.generatePdf(file, pdfOptions);
-      
-      return {
-        success: true,
-        buffer: pdfBuffer,
-        size: pdfBuffer.length
-      };
-      
-    } catch (error) {
-      console.error('html-pdf-node generation error:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Create HTML content from document data
-   */
   static generateHTMLContent(documentData) {
+    validateReport(documentData);
+    for (const field of ['clauses', 'redFlags', 'recommendations', 'missingClauses']) {
+      if (
+        documentData[field] !== undefined &&
+        (!Array.isArray(documentData[field]) || documentData[field].length > 500)
+      )
+        throw httpError(400, `Invalid ${field}`);
+    }
+    documentData = escapeText(documentData);
     const {
       fileName = 'Unknown Document',
       summary = {},
       clauses = [],
       redFlags = [],
-      overallRiskLevel = 'medium',
+      overallRiskLevel = 'unknown',
       recommendations = [],
       missingClauses = [],
       favorability = {},
-      processedAt = new Date()
+      processedAt = new Date(),
     } = documentData;
 
     const getRiskColor = (level) => {
       switch (level?.toLowerCase()) {
-        case 'low': return '#10B981';
-        case 'medium': return '#F59E0B';
-        case 'high': return '#EF4444';
-        default: return '#6B7280';
+        case 'low':
+          return '#10B981';
+        case 'medium':
+          return '#F59E0B';
+        case 'high':
+          return '#EF4444';
+        default:
+          return '#6B7280';
       }
     };
 
     const getSeverityColor = (severity) => {
       switch (severity?.toLowerCase()) {
-        case 'critical': return '#DC2626';
-        case 'high': return '#EF4444';
-        case 'medium': return '#F59E0B';
-        case 'low': return '#10B981';
-        default: return '#6B7280';
+        case 'critical':
+          return '#DC2626';
+        case 'high':
+          return '#EF4444';
+        case 'medium':
+          return '#F59E0B';
+        case 'low':
+          return '#10B981';
+        default:
+          return '#6B7280';
       }
     };
 
@@ -441,27 +498,39 @@ class BackendPDFService {
         </div>
 
         <!-- Executive Summary -->
-        ${summary.title || summary.description ? `
+        ${
+          summary.title || summary.description
+            ? `
         <div class="section">
             <h2>Executive Summary</h2>
             <div class="summary-box">
                 ${summary.title ? `<h3>${summary.title}</h3>` : ''}
                 ${summary.description ? `<p>${summary.description}</p>` : ''}
-                ${summary.keyPoints && summary.keyPoints.length > 0 ? `
+                ${
+                  summary.keyPoints && summary.keyPoints.length > 0
+                    ? `
                     <h4 style="margin-top: 20px; margin-bottom: 10px;">Key Points:</h4>
                     <ul class="key-points">
-                        ${summary.keyPoints.map(point => `<li>${point}</li>`).join('')}
+                        ${summary.keyPoints.map((point) => `<li>${point}</li>`).join('')}
                     </ul>
-                ` : ''}
+                `
+                    : ''
+                }
             </div>
         </div>
-        ` : ''}
+        `
+            : ''
+        }
 
         <!-- Risk Assessment -->
-        ${redFlags.length > 0 ? `
+        ${
+          redFlags.length > 0
+            ? `
         <div class="section">
             <h2>Risk Assessment & Critical Issues</h2>
-            ${redFlags.map(flag => `
+            ${redFlags
+              .map(
+                (flag) => `
                 <div class="risk-item">
                     <div class="risk-header">
                         <div class="risk-title">${flag.issue}</div>
@@ -473,15 +542,23 @@ class BackendPDFService {
                     ${flag.potentialConsequences ? `<p><strong>Potential Consequences:</strong> ${flag.potentialConsequences}</p>` : ''}
                     ${flag.recommendations ? `<p><strong>Recommendations:</strong> ${flag.recommendations}</p>` : ''}
                 </div>
-            `).join('')}
+            `,
+              )
+              .join('')}
         </div>
-        ` : ''}
+        `
+            : ''
+        }
 
         <!-- Detailed Clause Analysis -->
-        ${clauses.length > 0 ? `
+        ${
+          clauses.length > 0
+            ? `
         <div class="section">
             <h2>Detailed Clause Analysis</h2>
-            ${clauses.map(clause => `
+            ${clauses
+              .map(
+                (clause) => `
                 <div class="clause-item">
                     <div class="clause-header">
                         <h3>${clause.title}</h3>
@@ -489,20 +566,28 @@ class BackendPDFService {
                             <span class="badge" style="background-color: ${getRiskColor(clause.riskLevel)}; color: white;">
                                 ${(clause.riskLevel || 'medium').toUpperCase()} RISK
                             </span>
-                            ${clause.importance ? `
+                            ${
+                              clause.importance
+                                ? `
                                 <span class="badge" style="background-color: #6b7280; color: white;">
                                     ${clause.importance.toUpperCase()}
                                 </span>
-                            ` : ''}
+                            `
+                                : ''
+                            }
                         </div>
                     </div>
                     
-                    ${clause.originalText ? `
+                    ${
+                      clause.originalText
+                        ? `
                         <div>
                             <strong>Original Text:</strong>
                             <div class="original-text">"${clause.originalText}"</div>
                         </div>
-                    ` : ''}
+                    `
+                        : ''
+                    }
                     
                     ${clause.explanation ? `<p><strong>Analysis:</strong> ${clause.explanation}</p>` : ''}
                     ${clause.riskAssessment ? `<p><strong>Risk Assessment:</strong> ${clause.riskAssessment}</p>` : ''}
@@ -510,36 +595,50 @@ class BackendPDFService {
                     ${clause.negotiationPoints ? `<p><strong>Negotiation Points:</strong> ${clause.negotiationPoints}</p>` : ''}
                     ${clause.keyTerms && clause.keyTerms.length > 0 ? `<p><strong>Key Terms:</strong> ${clause.keyTerms.join(', ')}</p>` : ''}
                 </div>
-            `).join('')}
+            `,
+              )
+              .join('')}
         </div>
-        ` : ''}
+        `
+            : ''
+        }
 
         <!-- Recommendations -->
-        ${recommendations.length > 0 ? `
+        ${
+          recommendations.length > 0
+            ? `
         <div class="section">
             <h2>Recommendations</h2>
             <div class="recommendations-box">
                 <ul class="recommendations-list">
-                    ${recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                    ${recommendations.map((rec) => `<li>${rec}</li>`).join('')}
                 </ul>
             </div>
         </div>
-        ` : ''}
+        `
+            : ''
+        }
 
         <!-- Missing Clauses -->
-        ${missingClauses.length > 0 ? `
+        ${
+          missingClauses.length > 0
+            ? `
         <div class="section">
             <h2>Missing or Recommended Clauses</h2>
             <div class="missing-clauses-box">
                 <ul class="recommendations-list">
-                    ${missingClauses.map(clause => `<li>${clause}</li>`).join('')}
+                    ${missingClauses.map((clause) => `<li>${clause}</li>`).join('')}
                 </ul>
             </div>
         </div>
-        ` : ''}
+        `
+            : ''
+        }
 
         <!-- Document Favorability -->
-        ${favorability.explanation && favorability.explanation !== 'Analysis not available' ? `
+        ${
+          favorability.explanation && favorability.explanation !== 'Analysis not available'
+            ? `
         <div class="section">
             <h2>Document Favorability Assessment</h2>
             <div class="favorability-box">
@@ -562,7 +661,9 @@ class BackendPDFService {
                 </div>
             </div>
         </div>
-        ` : ''}
+        `
+            : ''
+        }
 
         <!-- Footer -->
         <div class="footer">
@@ -584,35 +685,9 @@ class BackendPDFService {
    * Main method to generate PDF with fallback options
    */
   static async generatePDF(documentData, options = {}) {
-    const { method = 'puppeteer', ...pdfOptions } = options;
-    
-    try {
-      const htmlContent = this.generateHTMLContent(documentData);
-      
-      let result;
-      if (method === 'html-pdf-node') {
-        result = await this.generatePDFWithHtmlPdfNode(htmlContent, pdfOptions);
-      } else {
-        // Default to Puppeteer
-        result = await this.generatePDFWithPuppeteer(htmlContent, pdfOptions);
-      }
-      
-      // If primary method fails, try fallback
-      if (!result.success && method === 'puppeteer') {
-        console.log('Puppeteer failed, falling back to html-pdf-node');
-        result = await this.generatePDFWithHtmlPdfNode(htmlContent, pdfOptions);
-      }
-      
-      return result;
-      
-    } catch (error) {
-      console.error('PDF generation error:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
+    const pdfOptions = safeOptions(options);
+    const htmlContent = this.generateHTMLContent(documentData);
+    return this.generatePDFWithPuppeteer(htmlContent, pdfOptions);
   }
 }
-
 module.exports = BackendPDFService;

@@ -1,218 +1,107 @@
 const express = require('express');
-const router = express.Router();
 const multer = require('multer');
-const pdfParse = require('pdf-parse');
+const path = require('node:path');
+const { isUtf8 } = require('node:buffer');
 const mammoth = require('mammoth');
-const { analyzeDocument } = require('../services/aiService');
-
-// Configure multer for file uploads (memory storage)
-const upload = multer({ 
+const ai = require('../services/aiService');
+const pool = require('../config/database');
+const httpError = require('../utils/httpError');
+const router = express.Router();
+const upload = multer({
   storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    // Accept PDF, DOC, DOCX, TXT files
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain'
-    ];
-    
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Unsupported file type. Please upload PDF, DOC, DOCX, or TXT files.'));
-    }
-  }
+  limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 0, parts: 1 },
 });
 
-// POST /api/document/analyze-file
-router.post('/analyze-file', upload.single('document'), async (req, res) => {
+async function extractFile(file) {
+  const extension = path.extname(file.originalname).toLowerCase();
+  if (extension === '.txt') {
+    if (!isUtf8(file.buffer) || file.buffer.includes(0))
+      throw httpError(400, 'Upload a UTF-8 text file');
+    return file.buffer.toString('utf8');
+  }
+  if (extension === '.pdf') {
+    if (!file.buffer.subarray(0, 5).equals(Buffer.from('%PDF-')))
+      throw httpError(400, 'Invalid PDF file');
+    const { PDFParse } = require('pdf-parse');
+    const parser = new PDFParse({ data: file.buffer, isEvalSupported: false });
+    try {
+      return (await parser.getText()).text;
+    } finally {
+      await parser.destroy();
+    }
+  }
+  if (extension === '.docx') {
+    await require('../utils/validateDocx')(file.buffer);
+    return (await mammoth.extractRawText({ buffer: file.buffer, externalFileAccess: false })).value;
+  }
+  if (extension === '.doc') {
+    if (!file.buffer.subarray(0, 8).equals(Buffer.from('d0cf11e0a1b11ae1', 'hex')))
+      throw httpError(400, 'Invalid Word document');
+    const WordExtractor = require('word-extractor');
+    return (await new WordExtractor().extract(file.buffer)).getBody();
+  }
+  throw httpError(415, 'Upload a PDF, DOC, DOCX or UTF-8 TXT file');
+}
+router.post('/analyze-file', upload.single('document'), async (req, res, next) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No file uploaded'
-      });
+    if (!req.file) throw httpError(400, 'No file uploaded');
+    let text;
+    try {
+      text = await extractFile(req.file);
+    } catch (error) {
+      throw error.status
+        ? error
+        : httpError(
+            400,
+            'Could not read this document. Use an unencrypted PDF, Word document or UTF-8 text file.',
+          );
     }
-
-    // Extract text content from file buffer
-    let textContent = '';
-    const fileType = req.file.mimetype;
-    
-    if (fileType === 'text/plain') {
-      textContent = req.file.buffer.toString('utf-8');
-    } else if (fileType === 'application/pdf') {
-      try {
-        const pdfData = await pdfParse(req.file.buffer);
-        textContent = pdfData.text;
-      } catch (pdfError) {
-        console.error('PDF parsing error:', pdfError);
-        return res.status(400).json({
-          success: false,
-          message: 'Failed to parse PDF file. Please ensure the PDF contains readable text.'
-        });
-      }
-    } else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
-               fileType === 'application/msword') {
-      try {
-        const result = await mammoth.extractRawText({ buffer: req.file.buffer });
-        textContent = result.value;
-      } catch (wordError) {
-        console.error('Word document parsing error:', wordError);
-        return res.status(400).json({
-          success: false,
-          message: 'Failed to parse Word document. Please ensure the document is not corrupted.'
-        });
-      }
-    }
-
-    if (!textContent.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'File appears to be empty or could not extract text content'
-      });
-    }
-
-    // Use AI service to analyze document
-    const analysis = await analyzeDocument(textContent);
-    
+    const analysis = await ai.analyzeDocument(text);
     res.json({
       success: true,
       data: analysis,
-      message: 'Document analyzed successfully',
       fileInfo: {
-        name: req.file.originalname,
+        name: path.basename(req.file.originalname),
         size: req.file.size,
-        type: req.file.mimetype
-      }
+        type: req.file.mimetype,
+      },
     });
   } catch (error) {
-    console.error('Document analysis error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Document analysis failed',
-      error: error.message
-    });
+    next(error);
   }
 });
-
-// POST /api/document/analyze-text
-router.post('/analyze-text', async (req, res) => {
-  try {
-    const { text } = req.body;
-    
-    if (!text || !text.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Text content is required'
-      });
+for (const endpoint of ['/analyze-text', '/analyze'])
+  router.post(endpoint, async (req, res, next) => {
+    try {
+      res.json({ success: true, data: await ai.analyzeDocument(req.body?.text || req.body?.file) });
+    } catch (error) {
+      next(error);
     }
-
-    // Use AI service to analyze text
-    const analysis = await analyzeDocument(text);
-    
-    res.json({
-      success: true,
-      data: analysis,
-      message: 'Text analyzed successfully'
-    });
-  } catch (error) {
-    console.error('Text analysis error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Text analysis failed',
-      error: error.message
-    });
-  }
-});
-
-// POST /api/document/chat
-router.post('/chat', async (req, res) => {
+  });
+router.post('/chat', async (req, res, next) => {
   try {
-    const { message, context } = req.body;
-    
-    if (!message) {
-      return res.status(400).json({
-        success: false,
-        message: 'Message is required'
-      });
-    }
-
-    // Use AI service for chat response
-    const { generateChatResponse } = require('../services/aiService');
-    const response = await generateChatResponse(message, context);
-    
     res.json({
       success: true,
       data: {
-        response: response,
-        timestamp: new Date().toISOString()
+        response: await ai.generateChatResponse(req.body?.message, req.body?.context),
+        timestamp: new Date().toISOString(),
       },
-      message: 'Chat response generated successfully'
     });
   } catch (error) {
-    console.error('Chat error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Chat response failed',
-      error: error.message
-    });
+    next(error);
   }
 });
-
-// Legacy route for backward compatibility
-// POST /api/document/analyze
-router.post('/analyze', async (req, res) => {
+router.get('/:id', async (req, res, next) => {
   try {
-    const { text, file } = req.body;
-    const content = file || text;
-    
-    if (!content) {
-      return res.status(400).json({
-        success: false,
-        message: 'Text or file content is required'
-      });
-    }
-
-    const analysis = await analyzeDocument(content);
-    
-    res.json({
-      success: true,
-      data: analysis,
-      message: 'Document analyzed successfully'
-    });
+    if (!/^\d+$/.test(req.params.id)) throw httpError(400, 'Invalid document ID');
+    const result = await pool.query(
+      'SELECT id, title, file_type, file_size, analysis_result, created_at FROM documents WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.userId],
+    );
+    if (!result.rows[0]) throw httpError(404, 'Document not found');
+    res.json({ success: true, data: result.rows[0] });
   } catch (error) {
-    console.error('Document analysis error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Document analysis failed',
-      error: error.message
-    });
+    next(error);
   }
 });
-
-// GET /api/document/:id
-router.get('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // TODO: Implement document retrieval logic
-    res.json({ 
-      success: true,
-      message: 'Document retrieval endpoint - implementation pending',
-      id 
-    });
-  } catch (error) {
-    console.error('Document retrieval error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Document retrieval failed',
-      error: error.message
-    });
-  }
-});
-
 module.exports = router;

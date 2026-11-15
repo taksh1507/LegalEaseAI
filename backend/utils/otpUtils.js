@@ -32,8 +32,12 @@ function isOTPExpired(expiresAt) {
  * @returns {boolean} True if valid email
  */
 function isValidEmail(email) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  if (typeof email !== 'string' || email.length > 255 || /\s/.test(email)) return false;
+  const separator = email.indexOf('@');
+  if (separator <= 0 || separator !== email.lastIndexOf('@')) return false;
+  const domain = email.slice(separator + 1);
+  const dot = domain.lastIndexOf('.');
+  return dot > 0 && dot < domain.length - 1;
 }
 
 /**
@@ -52,5 +56,5 @@ module.exports = {
   getOTPExpiration,
   isOTPExpired,
   isValidEmail,
-  isValidMobile
+  isValidMobile,
 };

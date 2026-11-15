@@ -1,5 +1,6 @@
+import { API_BASE_URL, authHeaders } from '../config';
 class BackendPDFAPI {
-  constructor(baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5000') {
+  constructor(baseURL = API_BASE_URL) {
     this.baseURL = baseURL;
   }
 
@@ -12,11 +13,12 @@ class BackendPDFAPI {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders(),
         },
         body: JSON.stringify({
           documentData,
-          options
-        })
+          options,
+        }),
       });
 
       if (!response.ok) {
@@ -26,7 +28,7 @@ class BackendPDFAPI {
 
       // Get the PDF as blob
       const blob = await response.blob();
-      
+
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -38,7 +40,6 @@ class BackendPDFAPI {
       window.URL.revokeObjectURL(url);
 
       return { success: true, message: 'PDF downloaded successfully' };
-
     } catch (error) {
       console.error('Backend PDF generation error:', error);
       throw error;
@@ -54,11 +55,12 @@ class BackendPDFAPI {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders(),
         },
         body: JSON.stringify({
           documentData,
-          options
-        })
+          options,
+        }),
       });
 
       if (!response.ok) {
@@ -68,7 +70,6 @@ class BackendPDFAPI {
 
       const data = await response.json();
       return data;
-
     } catch (error) {
       console.error('Backend PDF base64 generation error:', error);
       throw error;
@@ -84,10 +85,11 @@ class BackendPDFAPI {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders(),
         },
         body: JSON.stringify({
-          documentData
-        })
+          documentData,
+        }),
       });
 
       if (!response.ok) {
@@ -97,7 +99,6 @@ class BackendPDFAPI {
 
       const data = await response.json();
       return data;
-
     } catch (error) {
       console.error('HTML preview generation error:', error);
       throw error;
@@ -109,10 +110,9 @@ class BackendPDFAPI {
    */
   async checkHealth() {
     try {
-      const response = await fetch(`${this.baseURL}/api/pdf/health`);
+      const response = await fetch(`${this.baseURL}/api/pdf/health`, { headers: authHeaders() });
       const data = await response.json();
       return data;
-
     } catch (error) {
       console.error('PDF service health check error:', error);
       return { success: false, error: error.message };

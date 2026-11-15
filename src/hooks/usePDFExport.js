@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react';
-import PDFService from '../services/PDFService';
 
 export const usePDFExport = () => {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -10,13 +9,14 @@ export const usePDFExport = () => {
     const {
       method = 'html', // 'html', 'structured', 'simple'
       fileName = `legal-analysis-${Date.now()}.pdf`,
-      element = printRef.current
+      element = printRef.current,
     } = options;
 
     setIsGenerating(true);
     setError(null);
 
     try {
+      const { default: PDFService } = await import('../services/PDFService');
       let result;
 
       switch (method) {
@@ -26,15 +26,15 @@ export const usePDFExport = () => {
           }
           result = await PDFService.generatePDFFromHTML(element, fileName);
           break;
-          
+
         case 'structured':
           result = await PDFService.generateStructuredPDF(documentData, fileName);
           break;
-          
+
         case 'simple':
           result = await PDFService.generateSimplePDF(documentData, fileName);
           break;
-          
+
         default:
           throw new Error(`Unknown PDF generation method: ${method}`);
       }
@@ -44,7 +44,6 @@ export const usePDFExport = () => {
       }
 
       return result;
-
     } catch (err) {
       const errorMessage = err.message || 'Failed to generate PDF';
       setError(errorMessage);
@@ -56,24 +55,24 @@ export const usePDFExport = () => {
   };
 
   const exportToHTML = async (documentData, fileName) => {
-    return generatePDF(documentData, { 
-      method: 'html', 
+    return generatePDF(documentData, {
+      method: 'html',
       fileName,
-      element: printRef.current 
+      element: printRef.current,
     });
   };
 
   const exportToStructured = async (documentData, fileName) => {
-    return generatePDF(documentData, { 
-      method: 'structured', 
-      fileName 
+    return generatePDF(documentData, {
+      method: 'structured',
+      fileName,
     });
   };
 
   const exportToSimple = async (documentData, fileName) => {
-    return generatePDF(documentData, { 
-      method: 'simple', 
-      fileName 
+    return generatePDF(documentData, {
+      method: 'simple',
+      fileName,
     });
   };
 
@@ -87,6 +86,6 @@ export const usePDFExport = () => {
     exportToHTML,
     exportToStructured,
     exportToSimple,
-    clearError
+    clearError,
   };
 };

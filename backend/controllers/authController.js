@@ -2,6 +2,9 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const pool = require('../config/database');
 const otpService = require('../services/otpService');
+const { getJWTSecret } = require('../config/security');
+const { generateOTP, isValidEmail } = require('../utils/otpUtils');
+const { sendEmail } = require('../services/emailService');
 
 // Helper function to simulate Neon's tagged template syntax
 const sql = (strings, ...values) => {
@@ -34,7 +37,7 @@ class AuthController {
       if (!phoneNumber) {
         return res.status(400).json({
           success: false,
-          error: 'Phone number is required'
+          error: 'Phone number is required',
         });
       }
 
@@ -42,7 +45,7 @@ class AuthController {
       if (!otpService.validatePhoneNumber(phoneNumber)) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid phone number format'
+          error: 'Invalid phone number format',
         });
       }
 
@@ -53,13 +56,13 @@ class AuthController {
       if (action === 'login') {
         const existingUser = await pool.query(
           'SELECT id, phone_number FROM users WHERE phone_number = $1',
-          [formattedPhone]
+          [formattedPhone],
         );
-        
+
         if (existingUser.rows.length === 0) {
           return res.status(404).json({
             success: false,
-            error: 'No account found with this phone number. Please register first.'
+            error: 'No account found with this phone number. Please register first.',
           });
         }
       }
@@ -70,7 +73,7 @@ class AuthController {
       if (!otpResult.success) {
         return res.status(500).json({
           success: false,
-          error: otpResult.error
+          error: otpResult.error,
         });
       }
 
@@ -79,7 +82,7 @@ class AuthController {
         phoneNumber: formattedPhone,
         action,
         timestamp: Date.now(),
-        attempts: 0
+        attempts: 0,
       });
 
       // Clean up expired OTP sessions (older than 10 minutes)
@@ -89,15 +92,11 @@ class AuthController {
         success: true,
         sessionId: otpResult.sessionId,
         message: 'OTP sent successfully',
-        // Include OTP for development/testing (remove in production)
-        ...(process.env.NODE_ENV === 'development' && { otp: otpResult.otp })
       });
-
     } catch (error) {
-      console.error('❌ Send OTP Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to send OTP'
+        error: 'Failed to send OTP',
       });
     }
   }
@@ -110,7 +109,7 @@ class AuthController {
       if (!sessionId || !otp) {
         return res.status(400).json({
           success: false,
-          error: 'Session ID and OTP are required'
+          error: 'Session ID and OTP are required',
         });
       }
 
@@ -119,7 +118,7 @@ class AuthController {
       if (!sessionInfo) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid or expired session'
+          error: 'Invalid or expired session',
         });
       }
 
@@ -128,7 +127,7 @@ class AuthController {
         otpStore.delete(sessionId);
         return res.status(400).json({
           success: false,
-          error: 'OTP session expired'
+          error: 'OTP session expired',
         });
       }
 
@@ -137,24 +136,33 @@ class AuthController {
         otpStore.delete(sessionId);
         return res.status(400).json({
           success: false,
-          error: 'Too many failed attempts. Please request a new OTP.'
+          error: 'Too many failed attempts. Please request a new OTP.',
         });
       }
 
-      // Verify OTP (for AUTOGEN2, we can skip API call and use stored OTP)
-      // In production with AUTOGEN, use: otpService.verifyOTP(sessionId, otp)
-      
-      // For development/demo with AUTOGEN2, we'll simulate verification
-      let isValidOTP = true; // Assume valid for demo
-      
+      if (sessionInfo.verifying)
+        return res.status(409).json({ success: false, error: 'Verification already in progress' });
+      sessionInfo.verifying = true;
+      sessionInfo.attempts += 1;
+      let verification;
+      try {
+        verification = await otpService.verifyOTP(sessionId, otp);
+      } finally {
+        sessionInfo.verifying = false;
+      }
+      if (verification.unavailable)
+        return res
+          .status(503)
+          .json({ success: false, error: 'SMS verification service unavailable' });
+      const isValidOTP = verification.success;
+
       if (!isValidOTP) {
-        sessionInfo.attempts += 1;
         otpStore.set(sessionId, sessionInfo);
-        
+
         return res.status(400).json({
           success: false,
           error: 'Invalid OTP',
-          attemptsLeft: 3 - sessionInfo.attempts
+          attemptsLeft: 3 - sessionInfo.attempts,
         });
       }
 
@@ -167,13 +175,19 @@ class AuthController {
         if (!user.success) {
           return res.status(500).json(user);
         }
-        
+
+        await pool.query(
+          'UPDATE users SET phone_verified = TRUE, mobile_verified = TRUE WHERE id = $1',
+          [user.data.id],
+        );
+        user.data.phone_verified = true;
+        user.data.mobile_verified = true;
         const token = this.generateToken(user.data);
         res.json({
           success: true,
           message: 'Registration successful',
           user: user.data,
-          token
+          token,
         });
       } else {
         // Login existing user
@@ -181,21 +195,25 @@ class AuthController {
         if (!user.success) {
           return res.status(500).json(user);
         }
-        
+
+        await pool.query(
+          'UPDATE users SET phone_verified = TRUE, mobile_verified = TRUE WHERE id = $1',
+          [user.data.id],
+        );
+        user.data.phone_verified = true;
+        user.data.mobile_verified = true;
         const token = this.generateToken(user.data);
         res.json({
           success: true,
           message: 'Login successful',
           user: user.data,
-          token
+          token,
         });
       }
-
     } catch (error) {
-      console.error('❌ Verify OTP Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to verify OTP'
+        error: 'Failed to verify OTP',
       });
     }
   }
@@ -208,20 +226,19 @@ class AuthController {
       if (!email || !password || !name) {
         return res.status(400).json({
           success: false,
-          error: 'Email, password, and name are required'
+          error: 'Email, password, and name are required',
         });
       }
 
       // Check if user exists
-      const existingUser = await pool.query(
-        'SELECT id FROM users WHERE email = $1',
-        [email]
-      );
+      const existingUser = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1', [
+        email,
+      ]);
 
       if (existingUser.rows.length > 0) {
         return res.status(400).json({
           success: false,
-          error: 'User already exists with this email'
+          error: 'User already exists with this email',
         });
       }
 
@@ -231,7 +248,7 @@ class AuthController {
       // Create user
       const newUser = await pool.query(
         'INSERT INTO users (email, password, name, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING id, email, name, created_at',
-        [email, hashedPassword, name]
+        [email, hashedPassword, name],
       );
 
       const user = newUser.rows[0];
@@ -241,14 +258,12 @@ class AuthController {
         success: true,
         message: 'Registration successful',
         user,
-        token
+        token,
       });
-
     } catch (error) {
-      console.error('❌ Email Registration Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to register user'
+        error: 'Failed to register user',
       });
     }
   }
@@ -261,20 +276,20 @@ class AuthController {
       if (!email || !password) {
         return res.status(400).json({
           success: false,
-          error: 'Email and password are required'
+          error: 'Email and password are required',
         });
       }
 
       // Find user
       const users = await pool.query(
-        'SELECT id, email, name, password, created_at FROM users WHERE email = $1',
-        [email]
+        'SELECT id, email, name, password, created_at, token_version, email_verified, phone_verified, mobile_verified, phone_number, mobile_number, auth_method FROM users WHERE LOWER(email) = $1',
+        [email],
       );
 
       if (users.rows.length === 0) {
         return res.status(401).json({
           success: false,
-          error: 'Invalid email or password'
+          error: 'Invalid email or password',
         });
       }
 
@@ -284,7 +299,7 @@ class AuthController {
       if (!user.password) {
         return res.status(401).json({
           success: false,
-          error: 'Account not properly configured. Please contact support.'
+          error: 'Account not properly configured. Please contact support.',
         });
       }
 
@@ -293,7 +308,7 @@ class AuthController {
       if (!isValidPassword) {
         return res.status(401).json({
           success: false,
-          error: 'Invalid email or password'
+          error: 'Invalid email or password',
         });
       }
 
@@ -306,14 +321,12 @@ class AuthController {
         success: true,
         message: 'Login successful',
         user,
-        token
+        token,
       });
-
     } catch (error) {
-      console.error('❌ Email Login Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to login'
+        error: 'Failed to login',
       });
     }
   }
@@ -326,14 +339,14 @@ class AuthController {
       if (!phoneNumber || !password) {
         return res.status(400).json({
           success: false,
-          error: 'Phone number and password are required'
+          error: 'Phone number and password are required',
         });
       }
 
       if (!name) {
         return res.status(400).json({
           success: false,
-          error: 'Name is required'
+          error: 'Name is required',
         });
       }
 
@@ -341,7 +354,7 @@ class AuthController {
       if (!otpService.validatePhoneNumber(phoneNumber)) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid phone number format'
+          error: 'Invalid phone number format',
         });
       }
 
@@ -355,7 +368,7 @@ class AuthController {
       if (existingUser.rows.length > 0) {
         return res.status(400).json({
           success: false,
-          error: 'User already exists with this phone number'
+          error: 'User already exists with this phone number',
         });
       }
 
@@ -376,14 +389,12 @@ class AuthController {
         success: true,
         message: 'Registration successful',
         user,
-        token
+        token,
       });
-
     } catch (error) {
-      console.error('❌ Phone Registration Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to register'
+        error: 'Failed to register',
       });
     }
   }
@@ -396,7 +407,7 @@ class AuthController {
       if (!phoneNumber || !password) {
         return res.status(400).json({
           success: false,
-          error: 'Phone number and password are required'
+          error: 'Phone number and password are required',
         });
       }
 
@@ -404,7 +415,7 @@ class AuthController {
       if (!otpService.validatePhoneNumber(phoneNumber)) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid phone number format'
+          error: 'Invalid phone number format',
         });
       }
 
@@ -412,7 +423,7 @@ class AuthController {
 
       // Find user
       const users = await sql`
-        SELECT id, phone_number, name, password, auth_method, created_at
+        SELECT id, phone_number, name, password, auth_method, created_at, token_version
         FROM users 
         WHERE phone_number = ${formattedPhone}
       `;
@@ -420,7 +431,7 @@ class AuthController {
       if (users.rows.length === 0) {
         return res.status(401).json({
           success: false,
-          error: 'Invalid phone number or password'
+          error: 'Invalid phone number or password',
         });
       }
 
@@ -430,7 +441,7 @@ class AuthController {
       if (!user.password) {
         return res.status(401).json({
           success: false,
-          error: 'Account not properly configured. Please contact support.'
+          error: 'Account not properly configured. Please contact support.',
         });
       }
 
@@ -439,7 +450,7 @@ class AuthController {
       if (!isValidPassword) {
         return res.status(401).json({
           success: false,
-          error: 'Invalid phone number or password'
+          error: 'Invalid phone number or password',
         });
       }
 
@@ -452,14 +463,12 @@ class AuthController {
         success: true,
         message: 'Login successful',
         user,
-        token
+        token,
       });
-
     } catch (error) {
-      console.error('❌ Phone Login Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to login'
+        error: 'Failed to login',
       });
     }
   }
@@ -477,7 +486,7 @@ class AuthController {
       if (existingUser.rows.length > 0) {
         return {
           success: false,
-          error: 'User already exists with this phone number'
+          error: 'User already exists with this phone number',
         };
       }
 
@@ -496,13 +505,12 @@ class AuthController {
 
       return {
         success: true,
-        data: newUser.rows[0]
+        data: newUser.rows[0],
       };
     } catch (error) {
-      console.error('❌ Register User Error:', error);
       return {
         success: false,
-        error: 'Failed to register user'
+        error: 'Failed to register user',
       };
     }
   }
@@ -511,7 +519,7 @@ class AuthController {
   async loginUser(phoneNumber) {
     try {
       const users = await sql`
-        SELECT id, phone_number, name, email, created_at
+        SELECT id, phone_number, name, email, created_at, token_version
         FROM users 
         WHERE phone_number = ${phoneNumber}
       `;
@@ -519,19 +527,18 @@ class AuthController {
       if (users.rows.length === 0) {
         return {
           success: false,
-          error: 'User not found'
+          error: 'User not found',
         };
       }
 
       return {
         success: true,
-        data: users.rows[0]
+        data: users.rows[0],
       };
     } catch (error) {
-      console.error('❌ Login User Error:', error);
       return {
         success: false,
-        error: 'Failed to login user'
+        error: 'Failed to login user',
       };
     }
   }
@@ -539,14 +546,15 @@ class AuthController {
   // Generate JWT token
   generateToken(user) {
     return jwt.sign(
-      { 
-        id: user.id,          // Use 'id' for consistency
-        userId: user.id,      // Keep userId for backward compatibility 
+      {
+        id: user.id, // Use 'id' for consistency
+        userId: user.id,
+        tokenVersion: user.token_version ?? 0, // Keep userId for backward compatibility
         email: user.email,
-        phoneNumber: user.phone_number 
+        phoneNumber: user.phone_number,
       },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
+      getJWTSecret(),
+      { expiresIn: '1h', algorithm: 'HS256' },
     );
   }
 
@@ -556,7 +564,7 @@ class AuthController {
       const userId = req.user.userId;
 
       const users = await sql`
-        SELECT id, email, phone_number, name, created_at
+        SELECT id, email, phone_number, mobile_number, name, created_at, email_verified, phone_verified, mobile_verified, auth_method
         FROM users 
         WHERE id = ${userId}
       `;
@@ -564,20 +572,18 @@ class AuthController {
       if (users.rows.length === 0) {
         return res.status(404).json({
           success: false,
-          error: 'User not found'
+          error: 'User not found',
         });
       }
 
       res.json({
         success: true,
-        user: users.rows[0]
+        user: users.rows[0],
       });
-
     } catch (error) {
-      console.error('❌ Get Profile Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to get user profile'
+        error: 'Failed to get user profile',
       });
     }
   }
@@ -588,16 +594,10 @@ class AuthController {
       const userId = req.user.userId; // Fix: use userId instead of id
       const { name } = req.body;
 
-      console.log('🔍 Update Profile Debug:', {
-        userId,
-        userObject: req.user,
-        requestBody: req.body
-      });
-
       if (!name || name.trim().length === 0) {
         return res.status(400).json({
           success: false,
-          error: 'Name is required'
+          error: 'Name is required',
         });
       }
 
@@ -606,13 +606,10 @@ class AuthController {
         SELECT id, name FROM users WHERE id = ${userId}
       `;
 
-      console.log('🔍 Existing user check:', existingUser);
-
       if (existingUser.rows.length === 0) {
-        console.log('❌ User not found in database with ID:', userId);
         return res.status(404).json({
           success: false,
-          error: 'User not found'
+          error: 'User not found',
         });
       }
 
@@ -624,26 +621,22 @@ class AuthController {
         RETURNING id, name, email, phone_number, auth_method, created_at, updated_at
       `;
 
-      console.log('🔍 Update result:', updatedUser);
-
       if (updatedUser.rows.length === 0) {
         return res.status(404).json({
           success: false,
-          error: 'User not found during update'
+          error: 'User not found during update',
         });
       }
 
       res.json({
         success: true,
         message: 'Profile updated successfully',
-        user: updatedUser.rows[0]
+        user: updatedUser.rows[0],
       });
-
     } catch (error) {
-      console.error('❌ Update Profile Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to update profile'
+        error: 'Failed to update profile',
       });
     }
   }
@@ -657,14 +650,14 @@ class AuthController {
       if (!currentPassword || !newPassword) {
         return res.status(400).json({
           success: false,
-          error: 'Current password and new password are required'
+          error: 'Current password and new password are required',
         });
       }
 
       if (newPassword.length < 6) {
         return res.status(400).json({
           success: false,
-          error: 'New password must be at least 6 characters long'
+          error: 'New password must be at least 6 characters long',
         });
       }
 
@@ -676,7 +669,7 @@ class AuthController {
       if (user.rows.length === 0) {
         return res.status(404).json({
           success: false,
-          error: 'User not found'
+          error: 'User not found',
         });
       }
 
@@ -685,7 +678,7 @@ class AuthController {
       if (!isValidPassword) {
         return res.status(401).json({
           success: false,
-          error: 'Current password is incorrect'
+          error: 'Current password is incorrect',
         });
       }
 
@@ -695,20 +688,18 @@ class AuthController {
       // Update password
       await sql`
         UPDATE users 
-        SET password = ${hashedNewPassword}, updated_at = NOW()
+        SET password = ${hashedNewPassword}, token_version = token_version + 1, updated_at = NOW()
         WHERE id = ${userId}
       `;
 
       res.json({
         success: true,
-        message: 'Password changed successfully'
+        message: 'Password changed successfully',
       });
-
     } catch (error) {
-      console.error('❌ Change Password Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to change password'
+        error: 'Failed to change password',
       });
     }
   }
@@ -716,13 +707,14 @@ class AuthController {
   // Send OTP for profile email change
   async sendEmailOTPForProfile(req, res) {
     try {
+      cleanupExpiredOTPs();
       const userId = req.user.userId; // Fix: use userId instead of id
       const { email } = req.body;
 
-      if (!email || !this.validateEmail(email)) {
+      if (!email || !isValidEmail(email)) {
         return res.status(400).json({
           success: false,
-          error: 'Valid email is required'
+          error: 'Valid email is required',
         });
       }
 
@@ -734,13 +726,13 @@ class AuthController {
       if (existingUser.rows.length > 0) {
         return res.status(400).json({
           success: false,
-          error: 'Email is already in use by another account'
+          error: 'Email is already in use by another account',
         });
       }
 
       // Generate and store OTP
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      
+      const otp = generateOTP();
+
       // Store OTP in session (you might want to use Redis for production)
       const sessionId = `profile_email_${userId}_${Date.now()}`;
       otpStore.set(sessionId, {
@@ -749,25 +741,27 @@ class AuthController {
         otp,
         type: 'email_change',
         timestamp: Date.now(),
-        attempts: 0
+        attempts: 0,
       });
 
-      // Send email (implement your email service)
-      console.log(`📧 Profile Email Change OTP for ${email}: ${otp}`);
+      const delivery = await sendEmail(email, otp);
+      if (!delivery.success) {
+        otpStore.delete(sessionId);
+        return res
+          .status(503)
+          .json({ success: false, error: 'Email verification service unavailable' });
+      }
 
       res.json({
         success: true,
         message: 'OTP sent to your email',
         sessionId,
         // For development
-        otp: process.env.NODE_ENV === 'development' ? otp : undefined
       });
-
     } catch (error) {
-      console.error('❌ Send Email OTP Profile Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to send OTP'
+        error: 'Failed to send OTP',
       });
     }
   }
@@ -775,13 +769,14 @@ class AuthController {
   // Send OTP for profile phone change
   async sendPhoneOTPForProfile(req, res) {
     try {
+      cleanupExpiredOTPs();
       const userId = req.user.userId; // Fix: use userId instead of id
       const { phone } = req.body;
 
       if (!phone || !otpService.validatePhoneNumber(phone)) {
         return res.status(400).json({
           success: false,
-          error: 'Valid phone number is required'
+          error: 'Valid phone number is required',
         });
       }
 
@@ -795,13 +790,13 @@ class AuthController {
       if (existingUser.rows.length > 0) {
         return res.status(400).json({
           success: false,
-          error: 'Phone number is already in use by another account'
+          error: 'Phone number is already in use by another account',
         });
       }
 
       // Send OTP via 2Factor.in service
       const result = await otpService.sendOTP(formattedPhone);
-      
+
       if (result.success) {
         // Store session info
         const sessionId = `profile_phone_${userId}_${Date.now()}`;
@@ -811,26 +806,24 @@ class AuthController {
           type: 'phone_change',
           timestamp: Date.now(),
           attempts: 0,
-          sessionId: result.sessionId
+          sessionId: result.sessionId,
         });
 
         res.json({
           success: true,
           message: 'OTP sent to your phone number',
-          sessionId
+          sessionId,
         });
       } else {
         res.status(500).json({
           success: false,
-          error: result.error || 'Failed to send OTP'
+          error: result.error || 'Failed to send OTP',
         });
       }
-
     } catch (error) {
-      console.error('❌ Send Phone OTP Profile Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to send OTP'
+        error: 'Failed to send OTP',
       });
     }
   }
@@ -838,20 +831,20 @@ class AuthController {
   // Verify OTP and update profile
   async verifyProfileChange(req, res) {
     try {
-      const userId = req.user.userId; // Fix: use userId instead of id
+      const userId = req.user.userId;
       const { field, newValue, otp } = req.body;
 
       if (!field || !newValue || !otp) {
         return res.status(400).json({
           success: false,
-          error: 'Field, new value, and OTP are required'
+          error: 'Field, new value, and OTP are required',
         });
       }
 
       // Find the session
       let sessionInfo = null;
       let sessionKey = null;
-      
+
       for (const [key, value] of otpStore.entries()) {
         if (value.userId === userId && value.type === `${field}_change`) {
           sessionInfo = value;
@@ -863,7 +856,7 @@ class AuthController {
       if (!sessionInfo) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid or expired session'
+          error: 'Invalid or expired session',
         });
       }
 
@@ -872,7 +865,7 @@ class AuthController {
         otpStore.delete(sessionKey);
         return res.status(400).json({
           success: false,
-          error: 'OTP session expired'
+          error: 'OTP session expired',
         });
       }
 
@@ -881,28 +874,54 @@ class AuthController {
         otpStore.delete(sessionKey);
         return res.status(400).json({
           success: false,
-          error: 'Too many failed attempts. Please request a new OTP.'
+          error: 'Too many failed attempts. Please request a new OTP.',
         });
       }
 
+      if (
+        !['email', 'phone'].includes(field) ||
+        (field === 'email'
+          ? sessionInfo.email !== newValue
+          : sessionInfo.phone !== otpService.formatPhoneNumber(newValue))
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            error: 'Verification target does not match the requested change',
+          });
+      }
+      if (sessionInfo.verifying)
+        return res.status(409).json({ success: false, error: 'Verification already in progress' });
+      sessionInfo.attempts += 1;
       // Verify OTP
       let isValidOTP = false;
       if (field === 'email') {
         isValidOTP = sessionInfo.otp === otp;
       } else if (field === 'phone') {
         // For phone, verify with 2Factor.in service
-        const result = await otpService.verifyOTP(sessionInfo.sessionId, otp);
+        sessionInfo.verifying = true;
+        let result;
+        try {
+          result = await otpService.verifyOTP(sessionInfo.sessionId, otp);
+        } finally {
+          sessionInfo.verifying = false;
+        }
+        if (result.unavailable)
+          return res
+            .status(503)
+            .json({ success: false, error: 'SMS verification service unavailable' });
         isValidOTP = result.success;
       }
 
       if (!isValidOTP) {
         sessionInfo.attempts += 1;
         otpStore.set(sessionKey, sessionInfo);
-        
+
         return res.status(400).json({
           success: false,
           error: 'Invalid OTP',
-          attemptsLeft: 3 - sessionInfo.attempts
+          attemptsLeft: 3 - sessionInfo.attempts,
         });
       }
 
@@ -913,14 +932,14 @@ class AuthController {
       if (field === 'email') {
         updatedUser = await sql`
           UPDATE users 
-          SET email = ${newValue}, updated_at = NOW()
+          SET email = ${sessionInfo.email}, email_verified = TRUE, updated_at = NOW()
           WHERE id = ${userId}
           RETURNING id, name, email, phone_number, auth_method, created_at, updated_at
         `;
       } else if (field === 'phone') {
         updatedUser = await sql`
           UPDATE users 
-          SET phone_number = ${newValue}, updated_at = NOW()
+          SET phone_number = ${sessionInfo.phone}, phone_verified = TRUE, updated_at = NOW()
           WHERE id = ${userId}
           RETURNING id, name, email, phone_number, auth_method, created_at, updated_at
         `;
@@ -929,21 +948,19 @@ class AuthController {
       if (updatedUser.rows.length === 0) {
         return res.status(404).json({
           success: false,
-          error: 'User not found'
+          error: 'User not found',
         });
       }
 
       res.json({
         success: true,
         message: `${field === 'email' ? 'Email' : 'Phone number'} updated successfully`,
-        user: updatedUser.rows[0]
+        user: updatedUser.rows[0],
       });
-
     } catch (error) {
-      console.error('❌ Verify Profile Change Error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to verify and update profile'
+        error: 'Failed to verify and update profile',
       });
     }
   }
@@ -963,5 +980,5 @@ module.exports = {
   changePassword: authController.changePassword.bind(authController),
   sendEmailOTPForProfile: authController.sendEmailOTPForProfile.bind(authController),
   sendPhoneOTPForProfile: authController.sendPhoneOTPForProfile.bind(authController),
-  verifyProfileChange: authController.verifyProfileChange.bind(authController)
+  verifyProfileChange: authController.verifyProfileChange.bind(authController),
 };

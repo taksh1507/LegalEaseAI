@@ -1,40 +1,47 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
   ChatBubbleLeftRightIcon,
   XMarkIcon,
   PaperAirplaneIcon,
   SparklesIcon,
   ClockIcon,
   PlusIcon,
-  TrashIcon 
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
-const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticated, onAuthRequired }) => {
+const ChatWidget = ({
+  isOpen,
+  setIsOpen,
+  messages,
+  onSendMessage,
+  isAuthenticated,
+  onAuthRequired,
+  userId,
+}) => {
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [chatHistory, setChatHistory] = useState([]);
+  const historyKey = userId ? `legalease-chat-history:${userId}` : null;
+  const [historyState, setHistoryState] = useState({ key: null, items: [] });
+  const chatHistory = historyState.key === historyKey ? historyState.items : [];
+  const setChatHistory = (items) => setHistoryState({ key: historyKey, items });
   const [currentChatId, setCurrentChatId] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Load chat history from localStorage on component mount
   useEffect(() => {
-    const savedHistory = localStorage.getItem('legalease-chat-history');
-    if (savedHistory) {
-      setChatHistory(JSON.parse(savedHistory));
+    let items = [];
+    try {
+      const stored = historyKey ? JSON.parse(localStorage.getItem(historyKey) || '[]') : [];
+      if (Array.isArray(stored)) items = stored;
+    } catch {
+      /* Invalid local cache is not treated as a verified conversation. */
     }
-  }, []);
+    setHistoryState({ key: historyKey, items });
+  }, [historyKey]);
 
-  // Save current chat to history when messages change
-  useEffect(() => {
-    if (messages.length > 1 && currentChatId) { // Only save if there are actual conversations
-      saveChatToHistory();
-    }
-  }, [messages]);
-
-  const saveChatToHistory = () => {
-    if (!isAuthenticated || messages.length <= 1) return;
+  const saveChatToHistory = useCallback(() => {
+    if (!isAuthenticated || !historyKey || messages.length <= 1) return;
 
     const chatTitle = messages[1]?.text?.substring(0, 50) + '...' || 'New Chat';
     const chatData = {
@@ -42,37 +49,47 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
       title: chatTitle,
       messages: messages,
       timestamp: new Date().toISOString(),
-      messageCount: messages.length
+      messageCount: messages.length,
     };
 
-    const updatedHistory = chatHistory.filter(chat => chat.id !== chatData.id);
-    updatedHistory.unshift(chatData);
-    
-    // Keep only last 20 chats
-    const limitedHistory = updatedHistory.slice(0, 20);
-    
-    setChatHistory(limitedHistory);
-    localStorage.setItem('legalease-chat-history', JSON.stringify(limitedHistory));
-    
+    setHistoryState((previous) => ({
+      key: historyKey,
+      items: [
+        chatData,
+        ...(previous.key === historyKey ? previous.items : []).filter(
+          (chat) => chat.id !== chatData.id,
+        ),
+      ].slice(0, 20),
+    }));
+
     if (!currentChatId) {
       setCurrentChatId(chatData.id);
     }
-  };
+  }, [currentChatId, isAuthenticated, messages, historyKey]);
+
+  useEffect(() => {
+    if (messages.length > 1) saveChatToHistory();
+  }, [messages, currentChatId, saveChatToHistory]);
+
+  useEffect(() => {
+    if (historyKey && historyState.key === historyKey)
+      localStorage.setItem(historyKey, JSON.stringify(historyState.items));
+  }, [historyKey, historyState]);
 
   const startNewChat = () => {
     if (!isAuthenticated) {
       onAuthRequired();
       return;
     }
-    
+
     // Save current chat before starting new one
     if (messages.length > 1) {
       saveChatToHistory();
     }
-    
+
     setCurrentChatId(Date.now());
     setShowHistory(false);
-    
+
     // Reset to initial state - this should trigger the parent to reset messages
     window.dispatchEvent(new CustomEvent('newChatRequested'));
   };
@@ -80,22 +97,24 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
   const loadChatFromHistory = (chat) => {
     setCurrentChatId(chat.id);
     setShowHistory(false);
-    
+
     // Load chat messages - this should trigger the parent to load these messages
-    window.dispatchEvent(new CustomEvent('loadChatFromHistory', { 
-      detail: { chatId: chat.id, messages: chat.messages } 
-    }));
+    window.dispatchEvent(
+      new CustomEvent('loadChatFromHistory', {
+        detail: { chatId: chat.id, messages: chat.messages },
+      }),
+    );
   };
 
   const deleteChatFromHistory = (chatId) => {
-    const updatedHistory = chatHistory.filter(chat => chat.id !== chatId);
+    const updatedHistory = chatHistory.filter((chat) => chat.id !== chatId);
     setChatHistory(updatedHistory);
-    localStorage.setItem('legalease-chat-history', JSON.stringify(updatedHistory));
+    if (historyKey) localStorage.setItem(historyKey, JSON.stringify(updatedHistory));
   };
 
   const clearAllHistory = () => {
     setChatHistory([]);
-    localStorage.removeItem('legalease-chat-history');
+    if (historyKey) localStorage.removeItem(historyKey);
   };
 
   // Scroll to bottom when messages change
@@ -114,8 +133,8 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSendMessage = () => {
-    if (!inputMessage.trim()) return;
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isTyping) return;
 
     // Check if user is authenticated
     if (!isAuthenticated) {
@@ -123,14 +142,14 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
       return;
     }
 
-    onSendMessage(inputMessage);
+    const message = inputMessage;
     setInputMessage('');
     setIsTyping(true);
-
-    // Simulate AI typing delay
-    setTimeout(() => {
+    try {
+      await onSendMessage(message);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -141,29 +160,29 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
   };
 
   const formatTimestamp = (timestamp) => {
-    return new Date(timestamp).toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
   const suggestedQuestions = [
-    "What are the main risks in this contract?",
-    "Explain the termination clause",
-    "What happens if I breach this agreement?",
-    "Are there any automatic renewal terms?"
+    'What are the main risks in this contract?',
+    'Explain the termination clause',
+    'What happens if I breach this agreement?',
+    'Are there any automatic renewal terms?',
   ];
 
   if (!isOpen) {
     // Floating Chat Button
     return (
       <button
+        aria-label="Open document chat"
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 p-4 bg-primary-600 hover:bg-primary-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 z-50 group"
       >
         <ChatBubbleLeftRightIcon className="h-6 w-6" />
-        <div className="absolute -top-2 -right-2 w-3 h-3 bg-success-500 rounded-full animate-pulse"></div>
-        
+
         {/* Tooltip */}
         <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-accent-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
           Ask questions about your document
@@ -187,20 +206,22 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
               <p className="text-xs text-primary-100">Ask questions about your document</p>
             </div>
           </div>
-          
+
           {/* Header Actions */}
           <div className="flex items-center space-x-2">
             {isAuthenticated && (
               <>
                 <button
+                  aria-label="Start a new chat"
                   onClick={startNewChat}
                   className="p-1.5 hover:bg-white/20 rounded-lg transition-colors duration-200 group"
                   title="Start New Chat"
                 >
                   <PlusIcon className="h-4 w-4" />
                 </button>
-                
+
                 <button
+                  aria-label="View local chat history"
                   onClick={() => setShowHistory(!showHistory)}
                   className="p-1.5 hover:bg-white/20 rounded-lg transition-colors duration-200 group"
                   title="Chat History"
@@ -209,8 +230,9 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
                 </button>
               </>
             )}
-            
+
             <button
+              aria-label="Close document chat"
               onClick={() => setIsOpen(false)}
               className="p-1.5 hover:bg-white/20 rounded-lg transition-colors duration-200"
             >
@@ -225,7 +247,9 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
         <div className="border-b border-accent-200 dark:border-accent-700 bg-accent-50 dark:bg-accent-800 max-h-48 overflow-y-auto">
           <div className="p-3">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-medium text-accent-900 dark:text-accent-100">Chat History</h4>
+              <h4 className="text-sm font-medium text-accent-900 dark:text-accent-100">
+                Chat History
+              </h4>
               {chatHistory.length > 0 && (
                 <button
                   onClick={clearAllHistory}
@@ -235,7 +259,7 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
                 </button>
               )}
             </div>
-            
+
             {chatHistory.length === 0 ? (
               <p className="text-xs text-accent-600 dark:text-accent-400 text-center py-4">
                 No chat history yet. Start a conversation!
@@ -253,7 +277,8 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
                         {chat.title}
                       </p>
                       <p className="text-xs text-accent-600 dark:text-accent-400">
-                        {new Date(chat.timestamp).toLocaleDateString()} • {chat.messageCount} messages
+                        {new Date(chat.timestamp).toLocaleDateString()} • {chat.messageCount}{' '}
+                        messages
                       </p>
                     </div>
                     <button
@@ -283,7 +308,7 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
             <p className="text-accent-600 dark:text-accent-400 mb-4">
               Hi! I'm here to help you understand your legal document. Ask me anything!
             </p>
-            
+
             {/* Suggested Questions */}
             <div className="space-y-2">
               <p className="text-sm text-accent-500 dark:text-accent-400">Try asking:</p>
@@ -305,29 +330,39 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
                 key={message.id}
                 className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`max-w-[80%] ${
-                  message.sender === 'user' 
-                    ? 'chat-bubble-user' 
-                    : 'chat-bubble-ai'
-                }`}>
+                <div
+                  className={`max-w-[80%] ${
+                    message.sender === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'
+                  }`}
+                >
                   <p className="text-sm">{message.text}</p>
-                  <p className={`text-xs mt-1 opacity-70 ${
-                    message.sender === 'user' ? 'text-primary-100' : 'text-accent-500 dark:text-accent-400'
-                  }`}>
+                  <p
+                    className={`text-xs mt-1 opacity-70 ${
+                      message.sender === 'user'
+                        ? 'text-primary-100'
+                        : 'text-accent-500 dark:text-accent-400'
+                    }`}
+                  >
                     {formatTimestamp(message.timestamp)}
                   </p>
                 </div>
               </div>
             ))}
-            
+
             {/* Typing Indicator */}
             {isTyping && (
               <div className="flex justify-start">
                 <div className="chat-bubble-ai">
                   <div className="flex space-x-1">
                     <div className="w-2 h-2 bg-accent-400 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-accent-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                    <div className="w-2 h-2 bg-accent-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div
+                      className="w-2 h-2 bg-accent-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.1s' }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-accent-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.2s' }}
+                    ></div>
                   </div>
                 </div>
               </div>
@@ -346,19 +381,25 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
             </p>
           </div>
         )}
-        
+
         <div className="flex space-x-2">
           <textarea
             ref={inputRef}
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={isAuthenticated ? "Ask about clauses, risks, or anything else..." : "Sign in to start chatting..."}
+            aria-label="Message to legal assistant"
+            placeholder={
+              isAuthenticated
+                ? 'Ask about clauses, risks, or anything else...'
+                : 'Sign in to start chatting...'
+            }
             className="flex-1 resize-none px-3 py-2 border border-accent-300 dark:border-accent-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-accent-800 text-accent-900 dark:text-accent-100 placeholder-accent-500 dark:placeholder-accent-400 text-sm"
             rows={1}
             disabled={!isAuthenticated}
           />
           <button
+            aria-label="Send message"
             onClick={handleSendMessage}
             disabled={!inputMessage.trim() || !isAuthenticated}
             className={`p-2 rounded-lg transition-colors duration-200 ${
@@ -370,12 +411,11 @@ const ChatWidget = ({ isOpen, setIsOpen, messages, onSendMessage, isAuthenticate
             <PaperAirplaneIcon className="h-5 w-5" />
           </button>
         </div>
-        
+
         <p className="text-xs text-accent-500 dark:text-accent-400 mt-2">
           {isAuthenticated
-            ? "Press Enter to send • AI responses are for guidance only"
-            : "Sign in to chat with our AI assistant about legal documents"
-          }
+            ? 'Press Enter to send • AI responses are for guidance only'
+            : 'Sign in to chat with our AI assistant about legal documents'}
         </p>
       </div>
     </div>

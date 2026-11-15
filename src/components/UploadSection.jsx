@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { 
-  CloudArrowUpIcon, 
-  DocumentTextIcon, 
+import {
+  CloudArrowUpIcon,
+  DocumentTextIcon,
   CheckCircleIcon,
-  ExclamationTriangleIcon 
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 
 const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuthRequired }) => {
@@ -12,28 +12,39 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
   const [textInput, setTextInput] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [error, setError] = useState('');
-  
+
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
   // Supported file types
-  const supportedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-  const supportedExtensions = ['.pdf', '.docx'];
+  const supportedTypes = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+    'application/octet-stream',
+    '',
+  ];
+  const supportedExtensions = ['.pdf', '.doc', '.docx', '.txt'];
 
   // Handle file validation
   const validateFile = (file) => {
     if (!file) return false;
-    
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+
+    if (file.size > 10 * 1024 * 1024) {
+      // 10MB limit
       setError('File size must be less than 10MB');
       return false;
     }
-    
-    if (!supportedTypes.includes(file.type)) {
-      setError('Only PDF and DOCX files are supported');
+
+    if (
+      !supportedTypes.includes(file.type) ||
+      !supportedExtensions.some((extension) => file.name.toLowerCase().endsWith(extension))
+    ) {
+      setError('Use PDF, DOC, DOCX or UTF-8 TXT files');
       return false;
     }
-    
+
     setError('');
     return true;
   };
@@ -54,7 +65,7 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     const files = e.dataTransfer.files;
     if (files && files[0]) {
       handleFileSelect(files[0]);
@@ -83,17 +94,17 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
       setError('Please enter some text');
       return false;
     }
-    
+
     if (text.length < 50) {
       setError('Text should be at least 50 characters long');
       return false;
     }
-    
-    if (text.length > 50000) {
-      setError('Text should be less than 50,000 characters');
+
+    if (text.length > 60000) {
+      setError('Text should be less than 60,000 characters');
       return false;
     }
-    
+
     setError('');
     return true;
   };
@@ -169,8 +180,8 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
                 dragActive
                   ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20'
                   : selectedFile
-                  ? 'border-success-400 bg-success-50 dark:bg-success-900/20'
-                  : 'border-accent-300 dark:border-accent-600 hover:border-accent-400 dark:hover:border-accent-500'
+                    ? 'border-success-400 bg-success-50 dark:bg-success-900/20'
+                    : 'border-accent-300 dark:border-accent-600 hover:border-accent-400 dark:hover:border-accent-500'
               }`}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
@@ -185,7 +196,7 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 disabled={isProcessing}
               />
-              
+
               <div className="space-y-4">
                 {selectedFile ? (
                   <>
@@ -212,9 +223,9 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
                     </div>
                   </>
                 )}
-                
+
                 <div className="text-xs text-accent-500 dark:text-accent-400">
-                  Supports PDF and DOCX files up to 10MB
+                  Supports PDF, DOC, DOCX and TXT files up to 10MB
                 </div>
               </div>
             </div>
@@ -242,8 +253,10 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
                   Paste Legal Text
                 </h3>
               </div>
-              
+
               <textarea
+                aria-label="Legal document text"
+                maxLength={60000}
                 ref={textareaRef}
                 value={textInput}
                 onChange={(e) => setTextInput(e.target.value)}
@@ -251,10 +264,10 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
                 className="input-field min-h-[200px] resize-none"
                 disabled={isProcessing}
               />
-              
+
               <div className="flex justify-between items-center text-sm">
                 <span className="text-accent-500 dark:text-accent-400">
-                  {textInput.length} / 50,000 characters
+                  {textInput.length} / 60,000 characters
                 </span>
                 <span className="text-accent-500 dark:text-accent-400">
                   Minimum 50 characters required
@@ -266,11 +279,12 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
 
         {/* Error Display */}
         {error && (
-          <div className="flex items-center space-x-2 p-4 bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800 rounded-lg animate-slide-up">
+          <div
+            role="alert"
+            className="flex items-center space-x-2 p-4 bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800 rounded-lg animate-slide-up"
+          >
             <ExclamationTriangleIcon className="h-5 w-5 text-danger-500" />
-            <span className="text-danger-700 dark:text-danger-300 text-sm">
-              {error}
-            </span>
+            <span className="text-danger-700 dark:text-danger-300 text-sm">{error}</span>
           </div>
         )}
 
@@ -278,7 +292,10 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
         <div className="text-center">
           <button
             onClick={handleSubmit}
-            disabled={isProcessing || (!selectedFile && !textInput.trim())}
+            disabled={
+              isProcessing ||
+              (isAuthenticated && (uploadMethod === 'file' ? !selectedFile : !textInput.trim()))
+            }
             className={`btn-primary text-lg px-8 py-3 ${
               isProcessing ? 'opacity-50 cursor-not-allowed' : ''
             }`}
@@ -294,12 +311,13 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
               'Sign In to Analyze Document'
             )}
           </button>
-          
+
           {/* Authentication prompt for non-authenticated users */}
           {!isAuthenticated && (
             <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
               <p className="text-amber-700 dark:text-amber-300 text-sm text-center">
-                🔒 Sign in to unlock AI-powered legal document analysis with detailed clause explanations, risk assessments, and negotiation insights.
+                🔒 Sign in to unlock AI-powered legal document analysis with detailed clause
+                explanations, risk assessments, and negotiation insights.
               </p>
             </div>
           )}
@@ -319,9 +337,12 @@ const UploadSection = ({ onUpload, isProcessing, isAuthenticated = false, onAuth
                 </p>
               </div>
             </div>
-            
+
             <div className="mt-4 bg-accent-100 dark:bg-accent-700 rounded-full h-2">
-              <div className="bg-primary-600 h-2 rounded-full animate-pulse" style={{ width: '75%' }}></div>
+              <div
+                className="bg-primary-600 h-2 rounded-full animate-pulse"
+                style={{ width: '75%' }}
+              ></div>
             </div>
           </div>
         )}

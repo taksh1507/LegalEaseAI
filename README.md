@@ -1,202 +1,130 @@
 # LegalEaseAI
 
-[![Frontend: React](https://img.shields.io/badge/frontend-React%2018-61DAFB?logo=react&logoColor=white)](src)
-[![Backend: Node.js + Express](https://img.shields.io/badge/backend-Node.js%20Express-339933?logo=nodedotjs&logoColor=white)](backend)
-[![Database: PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)](backend/database)
-[![LLM: Gemini + OpenRouter](https://img.shields.io/badge/LLM-Gemini%20%7C%20OpenRouter-4285F4?logo=google&logoColor=white)](backend/services)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Application verification](https://github.com/taksh1507/LegalEaseAI/actions/workflows/backend-security-tests.yml/badge.svg)](https://github.com/taksh1507/LegalEaseAI/actions/workflows/backend-security-tests.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Advanced Full-Stack Legal Document Analyzer & Conversational Assistant**
+A full-stack workspace for reading contracts, understanding individual clauses, asking follow-up questions, and exporting a review. Built with **React 18, Vite, Express 5, PostgreSQL, and OpenRouter**.
 
-LegalEaseAI is an enterprise-grade legal document analysis platform. It leverages state-of-the-art Large Language Models (LLMs) to ingest complex contracts, leases, and agreements, extract key clauses, detect risk factors, and provide plain-English explanations. The application features an interactive chatbot that allows users to converse directly with their documents in a secure, contextual sandbox.
+![LegalEaseAI workspace](docs/assets/workspace-desktop.png)
 
----
+## What works
 
-## 🌟 Key Capabilities
+- Upload PDF, DOCX, DOC, or UTF-8 TXT files up to 10 MB, or paste text. Analysis accepts up to 60,000 characters and rejects oversized input rather than silently truncating it.
+- Review the summary, quoted clauses, explanations, provider-assessed risks, and recommendations. Quoted original clauses must occur in the submitted document.
+- Ask questions with the current analysis as context. Provider outages produce actionable errors instead of fabricated successful responses.
+- Search, reopen, delete, and paginate saved analyses. History belongs to account IDs, so changing or reclaiming an email does not transfer another user's documents.
+- Download a text summary or create a browser PDF or server-rendered report. Report rendering escapes supplied text, blocks external network requests, and bounds concurrency.
+- Email verification, password sign-in, SMS verification, profile changes, and password-change token revocation. Paid analysis/chat/report endpoints require a verified contact.
+- Responsive light/dark interface, keyboard-operable dialogs, loading/error states, and explicit data-flow information.
 
-* **Intelligent Document Parsing**: Automatically extracts readable text from **PDF** and **Word (DOCX)** documents, as well as raw text inputs.
-* **Semantic Analysis & Clause Extraction**: Analyzes agreements at the clause level to detail original text, plain-language explanations, risk assessment levels (`Low`, `Medium`, `High`), and custom negotiation suggestions.
-* **Proactive Red Flag Detection**: Isolates critical issues, liability exposures, and unfavorable terms with severity warnings, potential consequences, and actionable recommendations.
-* **Contextual AI Chatbot**: A chat interface that maintains state and utilizes document content to answer specific follow-up questions, define legal jargon, and simulate negotiation scenarios.
-* **Secure Document Chunking**: Pre-processes massive documents by identifying legal section boundaries (e.g., `ARTICLE`, `SECTION`, `WHEREAS`), ensuring long documents fit within model limits without losing context.
-* **Interactive Document Preview & PDF Export**: Generates professional PDF summaries and structured reports directly from the web interface.
+<details>
+<summary>View an analysis on desktop and mobile</summary>
 
----
+![Desktop analysis](docs/assets/review-desktop.png)
+<img src="docs/assets/review-mobile.png" alt="Mobile analysis with clause details and risk summary" width="320" />
 
-## 🛠️ Tech Stack & Architecture
+Screenshots come from the production-build browser suite with synthetic documents and an explicitly mocked AI provider. They do not demonstrate legal accuracy or live provider availability.
+</details>
 
-### Frontend Architecture
-* **Library**: React 18
-* **Styling**: Tailwind CSS (Premium Dark/Light mode support)
-* **Animations**: Framer Motion (Fluid transitions and micro-interactions)
-* **Client-Side Export**: `html2canvas` & `jspdf` for high-fidelity PDF generation
+## Run locally
 
-### Backend & AI Infrastructure
-* **Framework**: Node.js & Express
-* **Database**: PostgreSQL (Neon Serverless Integration)
-* **Auth & Security**: Email OTP (One-Time Password) generation, JWT tokenization, and bcrypt secure hashing
-* **Parsing Utilities**: `pdf-parse` (for PDF text extractions) and `mammoth` (for DOCX extraction)
-* **LLM Providers**:
-  * **Google Gemini (Direct SDK)**: Native integration using `@google/generative-ai` supporting **Gemini 1.5 Flash** (high speed, cost-effective) and **Gemini 1.5 Pro** (advanced reasoning).
-  * **OpenRouter (API)**: Unified router access supporting **OpenAI GPT-4o-mini**, **GPT-4o**, and **Meta Llama 3**.
+Use **Node.js 22.12+**, PostgreSQL 16+, npm, and Chromium/Chrome (or Puppeteer's installed browser). PostgreSQL is required for authentication and saved data.
 
----
-
-## Architecture Overview
-
-```mermaid
-flowchart TB
-    subgraph Client["Client (React frontend)"]
-        UI["UploadSection · ChatWidget · Results<br/>PDFPreviewModal · Navbar"]
-    end
-
-    subgraph API["Backend (Node.js + Express)"]
-        Routes["Express routes<br/>(/api/auth, /api/document,<br/>/api/chat, /api/pdf)"]
-        Auth["JWT auth + Email OTP<br/>(bcrypt, nodemailer, twilio)"]
-    end
-
-    subgraph AI["AI & parsing layer"]
-        LLM["Gemini 1.5 Flash/Pro<br/>OpenRouter (GPT-4o, Llama 3)"]
-        Parser["pdf-parse · mammoth<br/>(PDF / DOCX extraction)"]
-        Chunker["Smart legal chunker<br/>(ARTICLE / SECTION / WHEREAS)"]
-    end
-
-    subgraph Store["Data store"]
-        PG[("PostgreSQL (Neon)<br/>document history + users")]
-    end
-
-    UI --> Routes
-    Routes --> Auth
-    Auth --> LLM
-    LLM --> Parser
-    Parser --> Chunker
-    Chunker --> PG
-    API --> PG
-```
-
-## 📂 Repository Structure
-
-```text
-LegalEaseAI/
-├── src/                        # React Frontend Application
-│   ├── components/             # UI Components
-│   │   ├── ChatWidget.js            # Floating conversational assistant
-│   │   ├── ClauseAccordion.js       # Clause-by-clause analysis collapse component
-│   │   ├── EnhancedAuthModal.js     # OTP and credential sign-in/up modal
-│   │   ├── Footer.js                # Footer layout with legal disclaimers
-│   │   ├── InfoModal.js             # Info modal wrapper for policy contents
-│   │   ├── ModalContent.js          # Raw HTML/Markdown policies (Privacy, Terms)
-│   │   ├── Navbar.js                # Top navigation header with dark mode toggle
-│   │   ├── PDFPreviewModal.js       # Export and print preview portal
-│   │   ├── PDFTemplate.js           # Print-friendly layout template
-│   │   ├── RedFlagSidebar.js        # Severe risk item sidebar
-│   │   ├── ResultsSection.js        # Main document results panel
-│   │   ├── SummaryCard.js           # Executive summary & quick stats display
-│   │   └── UploadSection.js         # File drag-and-drop / raw text uploader
-│   ├── services/               # Client-Side Service Handlers
-│   │   ├── BackendPDFAPI.js         # Backend PDF converter connector
-│   │   └── PDFService.js            # Client-side PDF formatting
-│   ├── App.js                  # App controller, context providers & routing
-│   ├── index.js                # DOM mount entrypoint
-│   └── index.css               # Global tailwind imports & CSS variables
-│
-├── backend/                    # Node.js Express API Server
-│   ├── config/                 # Configurations (PostgreSQL Pool)
-│   ├── controllers/            # Controller layer (auth, history controllers)
-│   ├── database/               # Init scripts and database schema files
-│   ├── middleware/             # Express middlewares (JWT Authenticator)
-│   ├── migrations/             # SQL database table migration configurations
-│   ├── routes/                 # Express Router files
-│   ├── services/               # Core services (AI generation, Email, Twilio OTP)
-│   ├── utils/                  # Utility functions (Smart chunker, prompts)
-│   └── index.js                # Main server entrypoint
-```
-
----
-
-## ⚙️ Setup and Installation
-
-### 1. Prerequisites
-Ensure you have the following installed on your machine:
-* **Node.js** (v18.x or higher)
-* **npm** (v9.x or higher)
-* **PostgreSQL Database** (Optional: required only for document history preservation)
-
-### 2. Environment Variables Configuration
-Configure your backend environment. Create a `.env` file in the `/backend` directory based on the template:
-
-```env
-PORT=5000
-NODE_ENV=development
-
-# Database Configuration (PostgreSQL)
-DATABASE_URL=postgresql://<username>:<password>@<host>:<port>/<database>
-
-# JWT Authentication
-JWT_SECRET=your_strong_jwt_secret_key
-
-# SMTP Credentials (For OTP Emails)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASS=your_gmail_app_password
-
-# LLM Providers Configuration (Configure at least one)
-OPENAI_ROUTER_KEY=your_openrouter_api_key
-GEMINI_API_KEY=your_google_gemini_api_key
-```
-
-### 3. Installation
-Install all package dependencies for the root, frontend, and backend components automatically:
 ```bash
-npm run install-all
+npm ci --ignore-scripts
+npm --prefix backend ci --ignore-scripts
+cp .env.example .env
+cp backend/.env.example backend/.env
 ```
 
-### 4. Running Locally
-Run both the frontend client and the backend server concurrently in development mode:
+Configure `backend/.env` before starting:
+
+| Setting | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Your PostgreSQL connection; enable verified TLS for hosted databases |
+| `JWT_SECRET` | Unique random value of at least 32 characters; no fallback is accepted |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | Real email verification delivery |
+| `OPENAI_ROUTER_KEY`, `OPENROUTER_MODEL` | AI provider credential and model |
+| `TWOFACTOR_API_KEY` | Required for SMS features; rotate the credential previously embedded in source |
+| `PUPPETEER_EXECUTABLE_PATH` | Path to an installed Chromium/Chrome when install scripts were skipped |
+| `CORS_ORIGINS` | Exact allowed browser origins |
+
+The root `.env` contains only the public `VITE_API_URL`. Never place provider keys or signing/database secrets in frontend environment variables. See [all API settings](backend/.env.example).
+
 ```bash
+# For existing data, back up and review the migration/ownership notes first.
+npm --prefix backend run db:migrate
 npm run dev
 ```
 
-* **Frontend Application**: `http://localhost:3000`
-* **Backend Server API**: `http://localhost:5000`
+Open `http://localhost:3000`; the API defaults to `http://localhost:5000`. Sign up using an email address you control. Missing email, SMS, or AI configuration returns a service-unavailable error; there is no demo authentication bypass. The API refuses startup without signing/database/schema configuration.
 
----
+For a production bundle, use `npm run build` (output: `build/`). Deployment and production migration are manual: follow [DEPLOYMENT.md](DEPLOYMENT.md).
 
-## 📡 Backend API Reference
+## Architecture
 
-### Authentication
-* `POST /api/auth/send-otp` - Dispatch email verification code.
-* `POST /api/auth/verify-otp` - Validate OTP and generate a JWT access token.
+```mermaid
+flowchart LR
+    Browser[React + Vite] --> API[Express API]
+    API --> Auth[JWT + verified contact + rate limits]
+    Auth --> Parser[Bounded document parsers]
+    Parser --> AI[OpenRouter]
+    Auth --> PG[(PostgreSQL)]
+    Auth --> Delivery[SMTP / 2Factor]
+    Auth --> PDF[Isolated Chromium report renderer]
+```
 
-### Document Management & Analysis
-* `POST /api/document/analyze-file` - Upload file (PDF, DOCX) via multipart/form-data for full AI analysis.
-* `POST /api/document/analyze-text` - Analyze raw pasted text.
-* `POST /api/document/chat` - Interact with the current document using the conversational chatbot.
-* `GET /api/document-history` - Retreive the current user's document history list.
+`src/components` contains the review/history/auth UI. `backend/app.js` assembles the testable HTTP application; `backend/index.js` validates configuration and manages startup/shutdown. Routes delegate authentication, extraction, AI, and report work to services. PostgreSQL stores users, hashed email challenges, saved analyses, and conversations. Browser chat also has an account-scoped local cache.
 
-### Document Export
-* `POST /api/pdf/generate` - Generate formatted export documents.
+The API uses parameterized SQL, account ownership checks, one-hour HS256 JWTs, bcrypt password hashes, bounded OTP attempts, explicit CORS, request limits, and safe error responses. Email challenges are bound to the original signup payload and consumed once in a transaction. Password changes increment a stored token version. See [SECURITY.md](SECURITY.md) for controls and remaining limitations.
 
-## ✅ Verification Status
+### Main API routes
 
-Verified in this audit:
-
-| Check | Result |
+| Method / path | Behavior |
 | --- | --- |
-| Backend `npm ci` | PASS |
-| Backend smoke (`node index.js`, limited mode, no DB) | `GET /` 200, `GET /health` 200 — server starts and degrades gracefully without `DATABASE_URL` |
-| Frontend `npm ci` | PASS |
-| Frontend `npm run build` | PASS — production `build/` output generated |
+| `GET /health`, `GET /ready` | Liveness and database/schema readiness |
+| `POST /api/auth/send-otp`, `/api/auth/verify-otp` | Email signup/sign-in challenge flow |
+| `POST /api/auth/login-email` | Password sign-in |
+| `GET /api/auth/profile` | Current authenticated account |
+| `POST /api/document/analyze-file`, `/api/document/analyze-text` | Verified-account document analysis |
+| `POST /api/chat` | Verified-account contextual chat |
+| `GET/POST/DELETE /api/document-history` | Account-owned history |
+| `POST /api/pdf/generate` | Verified-account formatted PDF |
 
-Fixes applied to unblock the production build:
-- Removed unused icon imports (`PDFTemplate.js`: `ClockIcon`, `ScaleIcon`, `ExclamationTriangleIcon`, `CheckCircleIcon`; `PDFPreviewModal.js`: `Cog6ToothIcon`; `SummaryCard.js`: `PrinterIcon`; `Navbar.js`: unused `useEffect`)
-- Removed dead function `handleSwitchAuthMode` (`App.js`)
+Protected routes accept `Authorization: Bearer <token>`. See route modules for individual request schemas; never log that header or document contents.
 
-Note: with `CI=true` forced, `react-scripts build` elevates two pre-existing warnings to errors (unused `handleSwitchAuthMode` — removed; `useEffect` exhaustive-deps in `ChatWidget.js`). The repo has no CI workflow; the standard `npm run build` passes. The `ChatWidget.js` hook dependency was left untouched because adding it "by the book" risks a render loop (the effect writes to state it reads).
+## Verification
 
----
+```bash
+npm run lint
+npm --prefix backend test
+npm run build
+npm audit --audit-level=low
+npm --prefix backend audit --audit-level=low
+```
 
-## ⚠️ Disclaimer
+Integration and browser tests require a **disposable loopback database whose name ends in `_test`**. They reset its schema and refuse to run without explicit authorization. Never use application data. Run the two suites sequentially if they share a database.
 
-LegalEaseAI provides AI-generated contract summaries, insights, and risk assessments for **educational and helper purposes only**. It does not constitute professional legal advice, nor does it create an attorney-client relationship. Always consult a qualified attorney for formal legal matters.
+```bash
+export TEST_DATABASE_URL=postgresql://test_user:test_password@127.0.0.1:5432/legalease_test
+export ALLOW_TEST_DATABASE_RESET=1
+export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+export PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium
+# Only if an isolated test container cannot support Chromium's sandbox:
+export PDF_DISABLE_SANDBOX=true
+npm --prefix backend run test:integration
+npm run test:e2e
+```
+
+The checked-in browser harness serves a real production build, real Express routes, and PostgreSQL with test-only email/SMS/AI adapters. CI runs the same flows with PostgreSQL 16. The final implementation report records **16 unit tests, 24 integration tests, and 6 browser tests** covering desktop, tablet, and mobile, plus lint/build and dependency checks. See [verification evidence and limits](docs/audits/FINAL_IMPLEMENTATION_REPORT.md).
+
+## Engineering decisions and limits
+
+- Vite replaces the obsolete Create React App toolchain. Report tools load on demand; the measured initial JS entry decreased from 900.34 KB to 272.72 KB (gzip 255.95 KB to 73.82 KB), using the same Vite build before and after splitting. This is an entry-bundle measurement, not total transferred code or a universal speed benchmark.
+- History ownership uses immutable user IDs. An additive, one-time migration preserves unmatched legacy records; review ambiguous ownership before production rollout.
+- Mobile/profile challenges and rate counters remain in memory. Run one API process until these move to a shared store; restarting invalidates those pending challenges.
+- Bearer tokens and account-scoped chat caches use browser local storage. Use trusted devices; an HTTP-only cookie/session design would require a separate CSRF/session migration.
+- No live email/SMS/AI accounts, production TLS/hosting, or deployed browser sandbox were validated. Legacy DOC extraction is wired but lacks a positive binary fixture test. Scanned PDFs require OCR, which is not implemented.
+- AI output can be wrong and is information for review, not legal advice. Document text is sent to the configured provider. Review provider retention and privacy terms before submitting sensitive material.
+
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Deployment](DEPLOYMENT.md) · [MIT license](LICENSE)

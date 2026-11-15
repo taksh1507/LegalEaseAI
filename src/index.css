@@ -2,8 +2,6 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
@@ -182,4 +180,178 @@
 .dark .risk-low {
   background-color: #14532d;
   color: #86efac;
+}
+/* Review workspace */
+.workspace-hero {
+  max-width: 1120px;
+  margin: 20px auto 32px;
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+.workspace-eyebrow {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  color: #49699e;
+  margin-bottom: 16px;
+}
+.workspace-hero h1 {
+  font-size: clamp(34px, 4.6vw, 58px);
+  line-height: 1.12;
+  font-weight: 750;
+  letter-spacing: -2px;
+  color: #172a48;
+}
+.workspace-hero h1 span {
+  color: #355fa4;
+}
+.workspace-intro {
+  max-width: 530px;
+  margin: 24px 0;
+  font-size: 17px;
+  line-height: 1.8;
+  color: #5c6c84;
+}
+.workspace-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.workspace-chips span {
+  font-size: 11px;
+  font-weight: 650;
+  border: 1px solid #d9e2ef;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: white;
+  color: #496184;
+}
+.workspace-session {
+  color: #5c6c84;
+  font-size: 12px;
+  margin-top: 20px;
+}
+.review-guide {
+  padding: 32px;
+  border: 1px solid #d9e2ef;
+  border-radius: 20px;
+  background: linear-gradient(140deg, #f6f9ff, #eef3fa);
+}
+.review-guide h2 {
+  font-size: 27px;
+  letter-spacing: -0.7px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: #172a48;
+}
+.review-guide ol {
+  margin-top: 28px;
+  display: grid;
+  gap: 22px;
+}
+.review-guide li {
+  display: flex;
+  gap: 16px;
+}
+.review-guide li > span {
+  border: 1px solid #d4dfef;
+  border-radius: 9px;
+  background: white;
+  height: 34px;
+  width: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  color: #49699e;
+  flex-shrink: 0;
+}
+.review-guide strong {
+  color: #263e60;
+  font-size: 13px;
+  font-weight: 650;
+}
+.review-guide li p {
+  color: #6b7c93;
+  font-size: 12px;
+  margin-top: 2px;
+}
+.workspace-privacy {
+  max-width: 850px;
+  margin: 0 auto 28px;
+  text-align: center;
+  color: #6b7c93;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.dark .workspace-hero h1,
+.dark .review-guide h2 {
+  color: #e4edfd;
+}
+.dark .workspace-hero h1 span {
+  color: #92b8ff;
+}
+.dark .workspace-intro,
+.dark .workspace-session,
+.dark .workspace-privacy {
+  color: #a5b5cb;
+}
+.dark .workspace-chips span,
+.dark .review-guide li > span {
+  background: #1c2b43;
+  border-color: #354760;
+  color: #b7ccec;
+}
+.dark .review-guide {
+  background: linear-gradient(140deg, #1c2b43, #142137);
+  border-color: #354760;
+}
+.dark .review-guide strong {
+  color: #dbe7f9;
+}
+.dark .review-guide li p {
+  color: #a5b5cb;
+}
+.skip-link {
+  position: fixed;
+  top: -80px;
+  left: 16px;
+  background: #172a48;
+  color: white;
+  padding: 12px;
+  z-index: 100;
+}
+.skip-link:focus {
+  top: 12px;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #6c9eee;
+  outline-offset: 3px;
+}
+@media (max-width: 800px) {
+  .workspace-hero {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    margin-top: 8px;
+  }
+  .workspace-hero h1 {
+    letter-spacing: -1.3px;
+  }
+  .review-guide {
+    padding: 24px;
+  }
+  .workspace-intro {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
