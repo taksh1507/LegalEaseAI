@@ -1,10 +1,92 @@
 const express = require('express');
 const router = express.Router();
+router.use((req, res, next) => {
+  if (!pool)
+    return res.status(503).json({ success: false, message: 'Authentication service unavailable' });
+  if (['POST', 'PUT'].includes(req.method)) {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body))
+      return res.status(400).json({ success: false, message: 'A JSON object is required' });
+    for (const key of [
+      'email',
+      'password',
+      'currentPassword',
+      'newPassword',
+      'current_password',
+      'new_password',
+      'phoneNumber',
+      'name',
+      'otp',
+      'sessionId',
+      'mobile_number',
+      'mode',
+      'action',
+      'field',
+      'newValue',
+      'phone',
+    ]) {
+      const value = req.body[key];
+      if (
+        value !== undefined &&
+        value !== null &&
+        (typeof value !== 'string' ||
+          value.length > (key.toLowerCase().includes('password') ? 72 : 255))
+      )
+        return res.status(400).json({ success: false, message: `Invalid ${key}` });
+      if (
+        key.toLowerCase().includes('password') &&
+        typeof value === 'string' &&
+        Buffer.byteLength(value) > 72
+      )
+        return res.status(400).json({ success: false, message: 'Password exceeds 72 bytes' });
+    }
+  }
+  if (typeof req.body?.email === 'string') {
+    if (!isValidEmail(req.body.email))
+      return res.status(400).json({ success: false, message: 'Valid email is required' });
+    req.body.email = req.body.email.trim().toLowerCase();
+  }
+  if (req.body?.field === 'email' && typeof req.body.newValue === 'string')
+    req.body.newValue = req.body.newValue.trim().toLowerCase();
+  if (req.path.startsWith('/register-') && req.body?.password) {
+    const validation = validatePassword(req.body.password);
+    if (!validation.valid)
+      return res.status(400).json({ success: false, message: validation.message });
+  }
+  for (const field of ['newPassword', 'new_password']) {
+    if (req.body?.[field]) {
+      const result = validatePassword(req.body[field]);
+      if (!result.valid) return res.status(400).json({ success: false, message: result.message });
+    }
+  }
+  if (req.body?.userData !== undefined) {
+    const value = req.body.userData;
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      (value.name !== undefined && (typeof value.name !== 'string' || value.name.length > 255)) ||
+      (value.email && (typeof value.email !== 'string' || !isValidEmail(value.email)))
+    )
+      return res.status(400).json({ success: false, message: 'Invalid signup details' });
+    if (
+      value.password !== undefined &&
+      value.password !== null &&
+      (typeof value.password !== 'string' ||
+        Buffer.byteLength(value.password) > 72 ||
+        !validatePassword(value.password).valid)
+    )
+      return res
+        .status(400)
+        .json({ success: false, message: 'A strong password of at most 72 bytes is required' });
+  }
+  if (req.body?.action && !['login', 'register'].includes(req.body.action))
+    return res.status(400).json({ success: false, message: 'Invalid authentication action' });
+  next();
+});
+
 const pool = require('../config/database');
-const jwt = require('jsonwebtoken');
-const { generateOTP, getOTPExpiration, isOTPExpired, isValidEmail } = require('../utils/otpUtils');
+const { isValidEmail } = require('../utils/otpUtils');
 const { validatePassword, hashPassword, comparePassword } = require('../utils/passwordUtils');
-const { sendEmail } = require('../services/emailService');
 const authController = require('../controllers/authController');
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -30,389 +112,20 @@ router.post('/send-email-otp-profile', authMiddleware, authController.sendEmailO
 router.post('/send-phone-otp-profile', authMiddleware, authController.sendPhoneOTPForProfile);
 router.post('/verify-profile-change', authMiddleware, authController.verifyProfileChange);
 
-/**
- * POST /send-otp
- * Send OTP to email for signup/signin verification
- */
-router.post('/send-otp', async (req, res) => {
+const { sendChallenge, verifyChallenge } = require('../services/emailAuthService');
+
+router.post('/send-otp', async (req, res, next) => {
   try {
-    const { email, name, password, mobile_number, mode } = req.body;
-
-    // Validate mode (signup or signin)
-    if (!mode || !['signup', 'signin'].includes(mode)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Mode must be either "signup" or "signin"'
-      });
-    }
-
-    // Validate email
-    if (!email || !isValidEmail(email)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Valid email is required'
-      });
-    }
-
-    // Check if database is available
-    if (!pool) {
-      console.log('Database not available - using mock mode');
-      // Generate mock OTP for development
-      const otp = generateOTP();
-      
-      // Send email if configured
-      try {
-        await sendEmail(email, 'LegalEaseAI - Verification Code', `Your verification code is: ${otp}`);
-        console.log(`Mock OTP sent to ${email}: ${otp}`);
-      } catch (emailError) {
-        console.log('Email service not available, but OTP generated:', otp);
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: 'OTP sent successfully (development mode)',
-        mockOtp: otp // Only for development - remove in production
-      });
-    }
-
-    // Database available - proceed with normal flow
-    let userExists = false;
-    let userResult = null;
-    try {
-      userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-      userExists = userResult.rows.length > 0;
-    } catch (dbError) {
-      console.error('Database query error:', dbError.message);
-      // Fall back to mock mode
-      const otp = generateOTP();
-      try {
-        await sendEmail(email, 'LegalEaseAI - Verification Code', `Your verification code is: ${otp}`);
-      } catch (emailError) {
-        console.log('Email service error:', emailError.message);
-      }
-      
-      return res.status(200).json({
-        success: true,
-        message: 'OTP sent successfully (fallback mode)',
-        mockOtp: otp
-      });
-    }
-
-    if (mode === 'signup') {
-      // Signup mode validations
-      if (userExists) {
-        return res.status(400).json({
-          success: false,
-          message: 'User already exists with this email. Please sign in instead.'
-        });
-      }
-
-      if (!name || !password) {
-        return res.status(400).json({
-          success: false,
-          message: 'Name and password are required for signup'
-        });
-      }
-
-      // Validate password strength
-      const passwordValidation = validatePassword(password);
-      if (!passwordValidation.valid) {
-        return res.status(400).json({
-          success: false,
-          message: passwordValidation.message
-        });
-      }
-
-      // Validate mobile number if provided
-      if (mobile_number && !/^\+?[\d\s\-\(\)]{10,15}$/.test(mobile_number)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid mobile number format'
-        });
-      }
-    } else {
-      // Signin mode validations
-      if (!userExists) {
-        return res.status(400).json({
-          success: false,
-          message: 'No account found with this email. Please sign up first.'
-        });
-      }
-
-      if (!password) {
-        return res.status(400).json({
-          success: false,
-          message: 'Password is required for signin'
-        });
-      }
-
-      // Verify password
-      const user = userResult.rows[0];
-      
-      // Check if user has a password (for users created before password system)
-      if (!user.password) {
-        return res.status(400).json({
-          success: false,
-          message: 'Account created before password system. Please reset your password or contact support.'
-        });
-      }
-      
-      const passwordMatch = await comparePassword(password, user.password);
-      if (!passwordMatch) {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid password'
-        });
-      }
-    }
-
-    const otp = generateOTP();
-    const expiresAt = getOTPExpiration();
-
-    // Clean up old OTPs for this email
-    await pool.query('DELETE FROM otps WHERE email = $1', [email]);
-
-    // Store new OTP with user data for signup
-    const otpData = {
-      email,
-      otp_code: otp,
-      expires_at: expiresAt
-    };
-
-    if (mode === 'signup') {
-      // Store signup data temporarily in OTP record (we'll move this to a separate table in production)
-      await pool.query(
-        'INSERT INTO otps (email, otp_code, expires_at) VALUES ($1, $2, $3)',
-        [email, otp, expiresAt]
-      );
-    } else {
-      await pool.query(
-        'INSERT INTO otps (email, otp_code, expires_at) VALUES ($1, $2, $3)',
-        [email, otp, expiresAt]
-      );
-    }
-
-    // Send OTP via email
-    const sendResult = await sendEmail(email, otp);
-
-    if (!sendResult.success) {
-      // Remove the OTP if sending failed
-      await pool.query(
-        'DELETE FROM otps WHERE email = $1 AND otp_code = $2',
-        [email, otp]
-      );
-
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to send OTP via email',
-        error: sendResult.error
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'OTP sent successfully to your email',
-      identifier: email,
-      expiresIn: '5 minutes'
-    });
-
+    res.json(await sendChallenge(req.body));
   } catch (error) {
-    console.error('Error in /send-otp:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: error.message
-    });
+    next(error);
   }
 });
-
-/**
- * POST /verify-otp
- * Verify OTP and create/login user
- */
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', async (req, res, next) => {
   try {
-    const { email, otp, name, password, mobile_number, mode } = req.body;
-
-    // Validate input
-    if (!otp || !email || !mode) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email, OTP, and mode are required'
-      });
-    }
-
-    if (!isValidEmail(email)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid email format'
-      });
-    }
-
-    // Check if database is available
-    if (!pool) {
-      console.log('Database not available - using mock verification');
-      
-      // For mock mode, accept any 6-digit OTP
-      if (otp.length === 6 && /^\d{6}$/.test(otp)) {
-        // Generate mock JWT token
-        const mockUser = {
-          id: Math.floor(Math.random() * 1000),
-          email: email,
-          name: name || 'Mock User'
-        };
-        
-        const token = jwt.sign(
-          { userId: mockUser.id, email: mockUser.email },
-          process.env.JWT_SECRET,
-          { expiresIn: '7d' }
-        );
-
-        return res.status(200).json({
-          success: true,
-          message: 'OTP verified successfully (mock mode)',
-          user: mockUser,
-          token: token
-        });
-      } else {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid OTP format'
-        });
-      }
-    }
-
-    // Database available - proceed with normal verification
-    try {
-      // Find OTP
-      const otpResult = await pool.query(
-        'SELECT * FROM otps WHERE email = $1 AND otp_code = $2 AND verified = false ORDER BY created_at DESC LIMIT 1',
-        [email, otp]
-      );
-
-      if (otpResult.rows.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid OTP'
-        });
-      }
-
-      const otpRecord = otpResult.rows[0];
-
-      // Check if OTP is expired
-      if (isOTPExpired(otpRecord.expires_at)) {
-        return res.status(400).json({
-          success: false,
-          message: 'OTP has expired'
-        });
-      }
-
-      // Mark OTP as verified
-      await pool.query('UPDATE otps SET verified = true WHERE id = $1', [otpRecord.id]);
-
-      let user;
-
-    if (mode === 'signup') {
-      // Validate signup data
-      if (!name || !password) {
-        return res.status(400).json({
-          success: false,
-          message: 'Name and password are required for signup'
-        });
-      }
-
-      // Hash password
-      const passwordHash = await hashPassword(password);
-
-      // Create new user
-      const insertResult = await pool.query(
-        `INSERT INTO users (name, email, phone_number, password, email_verified, auth_method, created_at, updated_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING id, name, email, phone_number, auth_method, created_at`,
-        [name, email, mobile_number || null, passwordHash, true, 'email']
-      );
-      user = insertResult.rows[0];
-    } else {
-      // Signin mode - get existing user
-      const userResult = await pool.query(
-        'SELECT id, name, email, mobile_number, email_verified, mobile_verified, created_at FROM users WHERE email = $1',
-        [email]
-      );
-
-      if (userResult.rows.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'User not found'
-        });
-      }
-
-      user = userResult.rows[0];
-
-      // Update email verification status
-      await pool.query(
-        'UPDATE users SET email_verified = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-        [user.id]
-      );
-      user.email_verified = true;
-    }
-
-    // Generate JWT token
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        name: user.name,
-        mobile_number: user.mobile_number
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.json({
-      success: true,
-      message: 'OTP verified successfully',
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        mobile_number: user.mobile_number,
-        email_verified: user.email_verified,
-        mobile_verified: user.mobile_verified,
-        created_at: user.created_at
-      }
-    });
-
-    } catch (dbError) {
-      console.error('Database error in verify-otp:', dbError.message);
-      
-      // Fall back to mock mode for development
-      const mockUser = {
-        id: Math.floor(Math.random() * 1000),
-        email: email,
-        name: name || 'Mock User'
-      };
-      
-      const token = jwt.sign(
-        { userId: mockUser.id, email: mockUser.email },
-        process.env.JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-
-      return res.status(200).json({
-        success: true,
-        message: 'OTP verified successfully (fallback mode)',
-        user: mockUser,
-        token: token
-      });
-    }
-
+    res.json(await verifyChallenge(req.body));
   } catch (error) {
-    console.error('Error in /verify-otp:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: error.message
-    });
+    next(error);
   }
 });
 
@@ -420,44 +133,42 @@ router.post('/verify-otp', async (req, res) => {
  * PUT /profile
  * Update user profile
  */
-router.put('/profile', async (req, res) => {
+router.put('/profile', authMiddleware, async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access token required'
-      });
-    }
-
-    // Verify JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.userId;
+    const userId = req.userId;
 
     // Check if body exists and has data
     if (!req.body || Object.keys(req.body).length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Request body is empty or missing'
+        message: 'Request body is empty or missing',
       });
     }
 
     const { name, email, mobile_number, current_password, new_password } = req.body;
 
     // Get current user
-    const userResult = await pool.query(
-      'SELECT * FROM users WHERE id = $1',
-      [userId]
-    );
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
 
     if (userResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: 'User not found',
       });
     }
 
     const currentUser = userResult.rows[0];
+    if (
+      (email !== undefined && email !== currentUser.email) ||
+      (mobile_number !== undefined && mobile_number !== currentUser.mobile_number)
+    ) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: 'Contact changes require the verified profile-change flow.',
+        });
+    }
     const updates = {};
     const setClause = [];
     const values = [];
@@ -475,20 +186,20 @@ router.put('/profile', async (req, res) => {
       if (!isValidEmail(email)) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid email format'
+          message: 'Invalid email format',
         });
       }
 
       // Check if email is already taken
-      const emailCheck = await pool.query(
-        'SELECT id FROM users WHERE email = $1 AND id != $2',
-        [email, userId]
-      );
+      const emailCheck = await pool.query('SELECT id FROM users WHERE email = $1 AND id != $2', [
+        email,
+        userId,
+      ]);
 
       if (emailCheck.rows.length > 0) {
         return res.status(400).json({
           success: false,
-          message: 'Email is already taken'
+          message: 'Email is already taken',
         });
       }
 
@@ -504,7 +215,7 @@ router.put('/profile', async (req, res) => {
       if (mobile_number && !/^\+?[\d\s\-\(\)]{10,15}$/.test(mobile_number)) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid mobile number format'
+          message: 'Invalid mobile number format',
         });
       }
 
@@ -512,13 +223,13 @@ router.put('/profile', async (req, res) => {
       if (mobile_number) {
         const mobileCheck = await pool.query(
           'SELECT id FROM users WHERE mobile_number = $1 AND id != $2',
-          [mobile_number, userId]
+          [mobile_number, userId],
         );
 
         if (mobileCheck.rows.length > 0) {
           return res.status(400).json({
             success: false,
-            message: 'Mobile number is already taken'
+            message: 'Mobile number is already taken',
           });
         }
       }
@@ -536,7 +247,7 @@ router.put('/profile', async (req, res) => {
       if (!current_password) {
         return res.status(400).json({
           success: false,
-          message: 'Current password is required to set new password'
+          message: 'Current password is required to set new password',
         });
       }
 
@@ -545,7 +256,7 @@ router.put('/profile', async (req, res) => {
       if (!passwordMatch) {
         return res.status(401).json({
           success: false,
-          message: 'Current password is incorrect'
+          message: 'Current password is incorrect',
         });
       }
 
@@ -554,7 +265,7 @@ router.put('/profile', async (req, res) => {
       if (!passwordValidation.valid) {
         return res.status(400).json({
           success: false,
-          message: passwordValidation.message
+          message: passwordValidation.message,
         });
       }
 
@@ -562,6 +273,7 @@ router.put('/profile', async (req, res) => {
       const newPasswordHash = await hashPassword(new_password);
       updates.password = newPasswordHash;
       setClause.push(`password = $${paramCount}`);
+      setClause.push('token_version = token_version + 1');
       values.push(newPasswordHash);
       paramCount++;
     }
@@ -569,7 +281,7 @@ router.put('/profile', async (req, res) => {
     if (setClause.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No changes to update'
+        message: 'No changes to update',
       });
     }
 
@@ -592,22 +304,20 @@ router.put('/profile', async (req, res) => {
       success: true,
       message: 'Profile updated successfully',
       user: updatedUser,
-      changes: Object.keys(updates)
+      changes: Object.keys(updates),
     });
-
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({
         success: false,
-        message: 'Invalid access token'
+        message: 'Invalid access token',
       });
     }
 
-    console.error('Error in /profile:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: error.message
+      error: error.message,
     });
   }
 });

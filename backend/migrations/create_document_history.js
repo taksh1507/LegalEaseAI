@@ -1,9 +1,8 @@
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const pool = require('../config/database');
 
 const createDocumentHistoryTable = async () => {
   if (!pool) {
-    console.log('⚠️  Database not configured - skipping document history table creation');
     return;
   }
 
@@ -35,8 +34,7 @@ const createDocumentHistoryTable = async () => {
     `;
 
     await pool.query(createTableQuery);
-    console.log('✅ Document history table created successfully');
-    
+
     // Create trigger for updated_at
     const createTriggerQuery = `
       CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -55,10 +53,7 @@ const createDocumentHistoryTable = async () => {
     `;
 
     await pool.query(createTriggerQuery);
-    console.log('✅ Document history triggers created successfully');
-    
   } catch (error) {
-    console.error('❌ Error creating document history table:', error);
     throw error;
   }
 };
@@ -67,11 +62,9 @@ const createDocumentHistoryTable = async () => {
 if (require.main === module) {
   createDocumentHistoryTable()
     .then(() => {
-      console.log('✅ Document history migration completed');
       process.exit(0);
     })
     .catch((error) => {
-      console.error('❌ Document history migration failed:', error);
       process.exit(1);
     });
 }

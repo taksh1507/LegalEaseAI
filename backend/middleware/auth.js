@@ -1,120 +1,70 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
+const { getJWTSecret } = require('../config/security');
 
-/**
- * Middleware to authenticate JWT tokens
- */
-const authenticateToken = async (req, res, next) => {
+async function resolveUser(req) {
+  const header = req.headers.authorization;
+  if (typeof header !== 'string' || !/^Bearer \S+$/.test(header)) return null;
+  const decoded = jwt.verify(header.slice(7), getJWTSecret(), { algorithms: ['HS256'] });
+  if (
+    !Number.isSafeInteger(decoded.userId) ||
+    decoded.userId < 1 ||
+    !Number.isSafeInteger(decoded.iat) ||
+    !Number.isSafeInteger(decoded.exp) ||
+    decoded.exp - decoded.iat > 3600
+  )
+    return null;
+  if (!pool) throw Object.assign(new Error('Authentication unavailable'), { status: 503 });
+  let result;
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access token required'
-      });
-    }
-
-    // Verify the JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    if (!pool) {
-      return res.status(503).json({ success: false, message: 'Authentication service unavailable' });
-    }
-
-    // Get user details from database
-    let userResult;
-    try {
-      const userQuery = 'SELECT id, email, name, created_at FROM users WHERE id = $1';
-      userResult = await pool.query(userQuery, [decoded.userId]);
-
-      if (!userResult || !userResult.rows || userResult.rows.length === 0) {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid token - user not found'
-        });
-      }
-    } catch (dbError) {
-      console.error('Database query error in auth middleware:', dbError);
-      return res.status(503).json({ success: false, message: 'Authentication service unavailable' });
-    }
-
-    // Attach user info to request
-    req.user = userResult.rows[0];
-    req.userId = decoded.userId;
-
-    next();
-  } catch (error) {
-    console.error('Authentication error:', error);
-
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid token'
-      });
-    }
-
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token expired'
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: 'Authentication failed'
-    });
+    result = await pool.query(
+      'SELECT id, email, name, created_at, token_version, email_verified, phone_verified, mobile_verified FROM users WHERE id = $1',
+      [decoded.userId],
+    );
+  } catch {
+    throw Object.assign(new Error('Authentication unavailable'), { status: 503 });
   }
-};
+  if (result.rows[0] && (decoded.tokenVersion ?? 0) !== (result.rows[0].token_version ?? 0))
+    return null;
+  return result.rows[0] ? { ...result.rows[0], userId: result.rows[0].id } : null;
+}
 
-/**
- * Optional middleware to get user info if token is provided
- */
-const optionalAuth = async (req, res, next) => {
+async function authenticateToken(req, res, next) {
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) {
-      // No token provided, continue without user info
-      req.user = null;
-      req.userId = null;
-      return next();
-    }
-
-    // Verify the JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Get user details from database
-    try {
-      const userQuery = 'SELECT id, email, name, created_at FROM users WHERE id = $1';
-      const userResult = await pool.query(userQuery, [decoded.userId]);
-
-      if (userResult && userResult.rows && userResult.rows.length > 0) {
-        req.user = userResult.rows[0];
-        req.userId = decoded.userId;
-      } else {
-        req.user = null;
-        req.userId = null;
-      }
-    } catch (dbError) {
-      console.error('Database query error in optional auth:', dbError);
-      req.user = null;
-      req.userId = null;
-    }
-
+    const user = await resolveUser(req);
+    if (!user)
+      return res.status(401).json({ success: false, message: 'Valid authentication required' });
+    req.user = user;
+    req.userId = user.id;
     next();
   } catch (error) {
-    // If token is invalid, continue without user info
+    const status = error.status === 503 ? 503 : 401;
+    return res
+      .status(status)
+      .json({
+        success: false,
+        message: status === 503 ? 'Authentication service unavailable' : 'Invalid or expired token',
+      });
+  }
+}
+
+async function optionalAuth(req, res, next) {
+  try {
+    req.user = await resolveUser(req);
+  } catch {
     req.user = null;
-    req.userId = null;
-    next();
   }
-};
-
-module.exports = {
-  authenticateToken,
-  optionalAuth
-};
+  req.userId = req.user?.id ?? null;
+  next();
+}
+function requireVerifiedContact(req, res, next) {
+  if (!req.user?.email_verified && !req.user?.phone_verified && !req.user?.mobile_verified)
+    return res
+      .status(403)
+      .json({
+        success: false,
+        message: 'Verify your email or phone in Profile before using document services.',
+      });
+  next();
+}
+module.exports = { authenticateToken, optionalAuth, requireVerifiedContact };
