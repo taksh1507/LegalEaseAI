@@ -12,9 +12,9 @@ A full-stack workspace for reading contracts, understanding individual clauses, 
 - Upload PDF, DOCX, DOC, or UTF-8 TXT files up to 10 MB, or paste text. Analysis accepts up to 60,000 characters and rejects oversized input rather than silently truncating it.
 - Review the summary, quoted clauses, explanations, provider-assessed risks, and recommendations. Quoted original clauses must occur in the submitted document.
 - Ask questions with the current analysis as context. Provider outages produce actionable errors instead of fabricated successful responses.
-- Search, reopen, delete, and paginate saved analyses. History belongs to account IDs, so changing or reclaiming an email does not transfer another user's documents.
-- Download a text summary or create a browser PDF or server-rendered report. Report rendering escapes supplied text, blocks external network requests, and bounds concurrency.
-- Email verification, password sign-in, SMS verification, profile changes, and password-change token revocation. Paid analysis/chat/report endpoints require a verified contact.
+- Search, reopen, delete, and paginate saved analyses. History is organized by account.
+- Download a text summary or create a browser PDF or server-rendered report. Choose the report format that fits your review.
+- Email verification, password sign-in, SMS verification, and profile management.
 - Responsive light/dark interface, keyboard-operable dialogs, loading/error states, and explicit data-flow information.
 
 <details>
@@ -45,7 +45,7 @@ Configure `backend/.env` before starting:
 | `JWT_SECRET` | Unique random value of at least 32 characters; no fallback is accepted |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | Real email verification delivery |
 | `OPENAI_ROUTER_KEY`, `OPENROUTER_MODEL` | AI provider credential and model |
-| `TWOFACTOR_API_KEY` | Required for SMS features; rotate the credential previously embedded in source |
+| `TWOFACTOR_API_KEY` | SMS provider configuration |
 | `PUPPETEER_EXECUTABLE_PATH` | Path to an installed Chromium/Chrome when install scripts were skipped |
 | `CORS_ORIGINS` | Exact allowed browser origins |
 
@@ -57,7 +57,7 @@ npm --prefix backend run db:migrate
 npm run dev
 ```
 
-Open `http://localhost:3000`; the API defaults to `http://localhost:5000`. Sign up using an email address you control. Missing email, SMS, or AI configuration returns a service-unavailable error; there is no demo authentication bypass. The API refuses startup without signing/database/schema configuration.
+Open `http://localhost:3000`; the API defaults to `http://localhost:5000`. Sign up using an email address you control. Missing email, SMS, or AI configuration returns a service-unavailable error. Complete the required API and database configuration before starting.
 
 For a production bundle, use `npm run build` (output: `build/`). Deployment and production migration are manual: follow [DEPLOYMENT.md](DEPLOYMENT.md).
 
@@ -76,7 +76,7 @@ flowchart LR
 
 `src/components` contains the review/history/auth UI. `backend/app.js` assembles the testable HTTP application; `backend/index.js` validates configuration and manages startup/shutdown. Routes delegate authentication, extraction, AI, and report work to services. PostgreSQL stores users, hashed email challenges, saved analyses, and conversations. Browser chat also has an account-scoped local cache.
 
-The API uses parameterized SQL, account ownership checks, one-hour HS256 JWTs, bcrypt password hashes, bounded OTP attempts, explicit CORS, request limits, and safe error responses. Email challenges are bound to the original signup payload and consumed once in a transaction. Password changes increment a stored token version. See [SECURITY.md](SECURITY.md) for controls and remaining limitations.
+Authentication, document processing, report generation, and saved history are handled by dedicated API modules. See [deployment guidance](DEPLOYMENT.md) for host configuration.
 
 ### Main API routes
 
@@ -116,15 +116,15 @@ npm --prefix backend run test:integration
 npm run test:e2e
 ```
 
-The checked-in browser harness serves a real production build, real Express routes, and PostgreSQL with test-only email/SMS/AI adapters. CI runs the same flows with PostgreSQL 16. The final implementation report records **16 unit tests, 24 integration tests, and 6 browser tests** covering desktop, tablet, and mobile, plus lint/build and dependency checks. See [verification evidence and limits](docs/audits/FINAL_IMPLEMENTATION_REPORT.md).
+The checked-in browser harness serves a real production build, real Express routes, and PostgreSQL with test-only email/SMS/AI adapters. CI runs the same flows with PostgreSQL 16. Verification covers **16 unit tests, 24 integration tests, and 6 browser tests** covering desktop, tablet, and mobile, plus lint/build and dependency checks. See [verification notes](docs/VERIFICATION.md).
 
-## Engineering decisions and limits
+## Engineering notes
 
 - Vite replaces the obsolete Create React App toolchain. Report tools load on demand; the measured initial JS entry decreased from 900.34 KB to 272.72 KB (gzip 255.95 KB to 73.82 KB), using the same Vite build before and after splitting. This is an entry-bundle measurement, not total transferred code or a universal speed benchmark.
-- History ownership uses immutable user IDs. An additive, one-time migration preserves unmatched legacy records; review ambiguous ownership before production rollout.
-- Mobile/profile challenges and rate counters remain in memory. Run one API process until these move to a shared store; restarting invalidates those pending challenges.
-- Bearer tokens and account-scoped chat caches use browser local storage. Use trusted devices; an HTTP-only cookie/session design would require a separate CSRF/session migration.
+- Saved analyses use account IDs. Back up existing databases and review the migration before rollout.
+- The documented deployment configuration supports one API process.
+- Browser storage supports session persistence and account-scoped chat history.
 - No live email/SMS/AI accounts, production TLS/hosting, or deployed browser sandbox were validated. Legacy DOC extraction is wired but lacks a positive binary fixture test. Scanned PDFs require OCR, which is not implemented.
 - AI output can be wrong and is information for review, not legal advice. Document text is sent to the configured provider. Review provider retention and privacy terms before submitting sensitive material.
 
-[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Deployment](DEPLOYMENT.md) · [MIT license](LICENSE)
+[Contributing](CONTRIBUTING.md) · [Private reporting](SECURITY.md) · [Deployment](DEPLOYMENT.md) · [MIT license](LICENSE)
