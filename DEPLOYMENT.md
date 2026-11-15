@@ -26,8 +26,7 @@ exports with that policy before rollout. Test the real origin, not only localhos
 
 1. Provision restricted PostgreSQL access and set `backend/.env` or host-managed
    environment variables using `backend/.env.example` as the reference.
-2. Rotate the SMS provider credential previously embedded in source. Generate a
-   unique, random `JWT_SECRET` of at least 32 characters. Configure email/SMS and
+2. Generate a unique, random `JWT_SECRET` of at least 32 characters. Configure email/SMS and
    OpenRouter only with credentials you own.
 3. Back up existing data. Review `backend/database/auth_challenges.sql` and legacy
    history ownership before the explicit `npm --prefix backend run db:migrate`.
@@ -46,10 +45,8 @@ exports with that policy before rollout. Test the real origin, not only localhos
    or database/schema configuration is missing. Verify `/health` (liveness),
    `/ready` (database/schema readiness) and real authenticated workflows.
 
-The API currently assumes one process: pending mobile/profile challenges and
-rate-limit counters are in memory. Use shared, bounded stores and verify challenge
-replay behavior before adding replicas. Email authentication challenges are
-persisted in PostgreSQL.
+The documented configuration supports a single API process. Plan and validate
+shared application state before adding replicas.
 
 ## Verification before rollout
 
