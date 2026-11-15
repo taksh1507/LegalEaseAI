@@ -100,3 +100,22 @@ test('report rendering cannot be given a filesystem destination or executable te
     { status: 400 },
   );
 });
+
+test('email validation rejects oversized adversarial input and malformed addresses', () => {
+  const { isValidEmail } = require('../utils/otpUtils');
+  assert.equal(isValidEmail('!@!.' + '!.'.repeat(1000000)), false);
+  for (const value of [
+    null,
+    {},
+    '',
+    'a@@example.com',
+    '@example.com',
+    'a@example',
+    'a@.com',
+    'a@example.',
+    'a b@example.com',
+  ]) {
+    assert.equal(isValidEmail(value), false);
+  }
+  assert.equal(isValidEmail('taksh+review@sub.example.com'), true);
+});

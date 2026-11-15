@@ -116,7 +116,7 @@ npm --prefix backend run test:integration
 npm run test:e2e
 ```
 
-The checked-in browser harness serves a real production build, real Express routes, and PostgreSQL with test-only email/SMS/AI adapters. CI runs the same flows with PostgreSQL 16. The final implementation report records **15 unit tests, 24 integration tests, and 6 browser tests** covering desktop, tablet, and mobile, plus lint/build and dependency checks. See [verification evidence and limits](docs/audits/FINAL_IMPLEMENTATION_REPORT.md).
+The checked-in browser harness serves a real production build, real Express routes, and PostgreSQL with test-only email/SMS/AI adapters. CI runs the same flows with PostgreSQL 16. The final implementation report records **16 unit tests, 24 integration tests, and 6 browser tests** covering desktop, tablet, and mobile, plus lint/build and dependency checks. See [verification evidence and limits](docs/audits/FINAL_IMPLEMENTATION_REPORT.md).
 
 ## Engineering decisions and limits
 

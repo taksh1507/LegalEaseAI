@@ -65,7 +65,7 @@ no production deployment or production database migration was performed.
 | Root and API `npm ci --ignore-scripts --no-audit --no-fund` | Passed from lockfiles |
 | `npm run lint` | Passed |
 | `npm run build` | Passed, static output in `build/` |
-| `npm --prefix backend test` | 15 passed, 0 failed/skipped |
+| `npm --prefix backend test` | 16 passed, 0 failed/skipped |
 | `npm --prefix backend run test:integration` | 24 passed, 0 failed/skipped |
 | `npm run test:e2e` | 6 passed: desktop 1440px, tablet 768px, mobile 390px |
 | Root `npm audit --json` | 0 reported advisories at verification time |

@@ -19,6 +19,10 @@ No live account credentials or private documents were used.
 | Disabled hosted DB certificate verification | Verified TLS configuration and safe startup | Configuration review; production TLS remains unverified |
 | Obsolete/vulnerable dependency tree | Vite toolchain migration, remove duplicate/unused packages, security upgrades and lockfiles | Reproducible installs/build; zero advisories reported by both final npm audits |
 
+GitHub CodeQL also identified a potentially polynomial email-validation regex.
+The shared validator now uses bounded input and direct delimiter checks; an
+oversized adversarial-input regression verifies rejection.
+
 ## Defense in depth
 
 Explicit allowed origins, Helmet, request/account rate limits, body and file
