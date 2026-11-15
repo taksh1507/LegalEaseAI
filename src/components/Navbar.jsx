@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
-import { 
-  SunIcon, 
-  MoonIcon, 
-  Bars3Icon, 
-  XMarkIcon,
-  ScaleIcon
-} from '@heroicons/react/24/outline';
+import { SunIcon, MoonIcon, Bars3Icon, XMarkIcon, ScaleIcon } from '@heroicons/react/24/outline';
 
-const Navbar = ({ darkMode, setDarkMode, activeSection, setActiveSection, onNewDocument, user, isLoggedIn, onSignIn, onSignUp, onProfileClick }) => {
+const Navbar = ({
+  darkMode,
+  setDarkMode,
+  activeSection,
+  setActiveSection,
+  onNewDocument,
+  user,
+  isLoggedIn,
+  onSignIn,
+  onSignUp,
+  onProfileClick,
+}) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const baseMenuItems = [
     { name: 'Home', section: 'home' },
     { name: 'How It Works', section: 'how-it-works' },
-    { name: 'AI Help', section: 'ai-help' }
+    { name: 'AI Help', section: 'ai-help' },
+    ...(isLoggedIn ? [{ name: 'History', section: 'history' }] : []),
   ];
 
   const menuItems = baseMenuItems;
@@ -37,7 +43,7 @@ const Navbar = ({ darkMode, setDarkMode, activeSection, setActiveSection, onNewD
             </div>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:block">
+            <div className="hidden lg:block">
               <div className="ml-10 flex items-baseline space-x-8">
                 {menuItems.map((item) => (
                   <div key={item.section} className="relative">
@@ -58,11 +64,14 @@ const Navbar = ({ darkMode, setDarkMode, activeSection, setActiveSection, onNewD
           </div>
 
           {/* Right side items */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden lg:flex items-center space-x-4">
             {/* New Document Button */}
             {activeSection === 'results' && (
               <button
-                onClick={onNewDocument}
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onNewDocument();
+                }}
                 className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
               >
                 New Document
@@ -76,7 +85,10 @@ const Navbar = ({ darkMode, setDarkMode, activeSection, setActiveSection, onNewD
                   Welcome, {user?.name || user?.email || 'User'}
                 </span>
                 <button
-                  onClick={onProfileClick}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onProfileClick();
+                  }}
                   className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
                 >
                   Profile
@@ -85,13 +97,19 @@ const Navbar = ({ darkMode, setDarkMode, activeSection, setActiveSection, onNewD
             ) : (
               <div className="flex items-center space-x-3">
                 <button
-                  onClick={onSignIn}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onSignIn();
+                  }}
                   className="text-accent-600 dark:text-accent-300 hover:text-accent-900 dark:hover:text-accent-100 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
                   Sign In
                 </button>
                 <button
-                  onClick={onSignUp}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onSignUp();
+                  }}
                   className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
                 >
                   Sign Up
@@ -101,37 +119,30 @@ const Navbar = ({ darkMode, setDarkMode, activeSection, setActiveSection, onNewD
 
             {/* Theme Toggle */}
             <button
+              aria-label={darkMode ? 'Switch to light theme' : 'Switch to dark theme'}
               onClick={() => setDarkMode(!darkMode)}
               className="p-2 rounded-lg text-accent-600 dark:text-accent-300 hover:bg-accent-100 dark:hover:bg-accent-800 transition-colors duration-200"
-              aria-label="Toggle theme"
             >
-              {darkMode ? (
-                <SunIcon className="h-5 w-5" />
-              ) : (
-                <MoonIcon className="h-5 w-5" />
-              )}
+              {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
             </button>
           </div>
 
           {/* Mobile menu button */}
-          <div className="md:hidden flex items-center space-x-2">
+          <div className="lg:hidden flex items-center space-x-2">
             {/* Theme Toggle Mobile */}
             <button
+              aria-label={darkMode ? 'Switch to light theme' : 'Switch to dark theme'}
               onClick={() => setDarkMode(!darkMode)}
               className="p-2 rounded-lg text-accent-600 dark:text-accent-300 hover:bg-accent-100 dark:hover:bg-accent-800 transition-colors duration-200"
-              aria-label="Toggle theme"
             >
-              {darkMode ? (
-                <SunIcon className="h-5 w-5" />
-              ) : (
-                <MoonIcon className="h-5 w-5" />
-              )}
+              {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
             </button>
 
             <button
+              aria-label="Toggle navigation"
+              aria-expanded={mobileMenuOpen}
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-lg text-accent-600 dark:text-accent-300 hover:bg-accent-100 dark:hover:bg-accent-800 transition-colors duration-200"
-              aria-label="Toggle menu"
             >
               {mobileMenuOpen ? (
                 <XMarkIcon className="h-6 w-6" />
@@ -145,7 +156,7 @@ const Navbar = ({ darkMode, setDarkMode, activeSection, setActiveSection, onNewD
 
       {/* Mobile Navigation */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-white dark:bg-accent-900 border-t border-accent-200 dark:border-accent-700">
+        <div className="lg:hidden bg-white dark:bg-accent-900 border-t border-accent-200 dark:border-accent-700">
           <div className="px-2 pt-2 pb-3 space-y-1">
             {/* Navigation Items */}
             {menuItems.map((item) => (
@@ -173,7 +184,10 @@ const Navbar = ({ darkMode, setDarkMode, activeSection, setActiveSection, onNewD
                     Welcome, {user?.name || user?.email || 'User'}
                   </div>
                   <button
-                    onClick={onProfileClick}
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onProfileClick();
+                    }}
                     className="w-full text-left px-3 py-2 rounded-md text-base font-medium bg-primary-600 text-white hover:bg-primary-700 transition-colors duration-200"
                   >
                     Profile
@@ -182,13 +196,19 @@ const Navbar = ({ darkMode, setDarkMode, activeSection, setActiveSection, onNewD
               ) : (
                 <div className="space-y-2">
                   <button
-                    onClick={onSignIn}
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onSignIn();
+                    }}
                     className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-accent-600 dark:text-accent-300 hover:text-accent-900 dark:hover:text-accent-100 hover:bg-accent-100 dark:hover:bg-accent-800 transition-colors duration-200"
                   >
                     Sign In
                   </button>
                   <button
-                    onClick={onSignUp}
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onSignUp();
+                    }}
                     className="w-full text-left px-3 py-2 rounded-md text-base font-medium bg-primary-600 text-white hover:bg-primary-700 transition-colors duration-200"
                   >
                     Sign Up
@@ -201,7 +221,10 @@ const Navbar = ({ darkMode, setDarkMode, activeSection, setActiveSection, onNewD
             {activeSection === 'results' && (
               <div className="border-t border-accent-200 dark:border-accent-700 pt-3 mt-3">
                 <button
-                  onClick={onNewDocument}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onNewDocument();
+                  }}
                   className="w-full text-left px-3 py-2 rounded-md text-base font-medium bg-primary-600 text-white hover:bg-primary-700 transition-colors duration-200"
                 >
                   New Document

@@ -1,47 +1,50 @@
+import useDialog from '../hooks/useDialog';
+import { API_BASE_URL } from '../config';
 import React, { useState } from 'react';
-import { 
-  UserCircleIcon, 
-  XMarkIcon, 
-  CalendarIcon, 
-  PhoneIcon, 
-  EnvelopeIcon, 
+import {
+  UserCircleIcon,
+  XMarkIcon,
+  CalendarIcon,
+  PhoneIcon,
+  EnvelopeIcon,
   IdentificationIcon,
   PencilIcon,
   CheckIcon,
   XCircleIcon,
   KeyIcon,
   EyeIcon,
-  EyeSlashIcon
+  EyeSlashIcon,
 } from '@heroicons/react/24/outline';
 
-const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
+const UserProfile = ({ isOpen, user, onClose, onLogout, onUpdate, onPasswordChanged }) => {
+  const dialogRef = useDialog(isOpen, onClose);
   const [editMode, setEditMode] = useState({
     name: false,
     email: false,
-    phone: false
+    phone: false,
   });
   const [editedData, setEditedData] = useState({
     name: '',
     email: '',
-    phone: ''
+    phone: '',
   });
   const [currentUser, setCurrentUser] = useState(user); // Track current user data
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
-    confirmPassword: ''
+    confirmPassword: '',
   });
   const [showPasswords, setShowPasswords] = useState({
     current: false,
     new: false,
-    confirm: false
+    confirm: false,
   });
   const [otpVerification, setOtpVerification] = useState({
     show: false,
     field: '',
     otp: '',
-    newValue: ''
+    newValue: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -70,18 +73,18 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
   const userData = currentUser || {
     name: 'John Doe',
     email: 'john.doe@example.com',
-    subscription: 'Free'
+    subscription: 'Free',
   };
 
   // Initialize edited data when entering edit mode
   const handleEdit = (field) => {
     setEditedData({
       ...editedData,
-      [field]: userData[field] || ''
+      [field]: userData[field] || '',
     });
     setEditMode({
       ...editMode,
-      [field]: true
+      [field]: true,
     });
     setError('');
     setSuccess('');
@@ -91,11 +94,11 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
   const handleCancelEdit = (field) => {
     setEditMode({
       ...editMode,
-      [field]: false
+      [field]: false,
     });
     setEditedData({
       ...editedData,
-      [field]: ''
+      [field]: '',
     });
     setError('');
   };
@@ -113,7 +116,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
         show: true,
         field: field,
         otp: '',
-        newValue: editedData[field]
+        newValue: editedData[field],
       });
       return;
     }
@@ -128,36 +131,37 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
   const updateProfile = async (updates) => {
     setLoading(true);
     setError('');
-    
+
     try {
       const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}/api/auth/update-profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(updates)
+        body: JSON.stringify(updates),
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         setSuccess('Profile updated successfully!');
         // Update local storage with new user data
         localStorage.setItem('user', JSON.stringify(data.user));
         // Update local state immediately
         setCurrentUser(data.user);
+        onUpdate?.(data.user);
         // Reset edit mode
-        Object.keys(editMode).forEach(key => {
-          setEditMode(prev => ({ ...prev, [key]: false }));
+        Object.keys(editMode).forEach((key) => {
+          setEditMode((prev) => ({ ...prev, [key]: false }));
         });
         setTimeout(() => setSuccess(''), 3000);
       } else {
         setError(data.error || 'Failed to update profile');
       }
-    } catch (error) {
+    } catch {
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
@@ -168,35 +172,36 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
   const sendOTPForProfileChange = async () => {
     setLoading(true);
     setError('');
-    
+
     try {
       const token = localStorage.getItem('token');
-      const endpoint = otpVerification.field === 'email' 
-        ? '/api/auth/send-email-otp-profile' 
-        : '/api/auth/send-phone-otp-profile';
-      
+      const endpoint =
+        otpVerification.field === 'email'
+          ? '/api/auth/send-email-otp-profile'
+          : '/api/auth/send-phone-otp-profile';
+
       const payload = {
-        [otpVerification.field]: otpVerification.newValue
+        [otpVerification.field]: otpVerification.newValue,
       };
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         setSuccess(`OTP sent to ${otpVerification.newValue}`);
       } else {
         setError(data.error || 'Failed to send OTP');
       }
-    } catch (error) {
+    } catch {
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
@@ -212,38 +217,39 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
 
     setLoading(true);
     setError('');
-    
+
     try {
       const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}/api/auth/verify-profile-change`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           field: otpVerification.field,
           newValue: otpVerification.newValue,
-          otp: otpVerification.otp
-        })
+          otp: otpVerification.otp,
+        }),
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         setSuccess(`${otpVerification.field} updated successfully!`);
         // Update local storage with new user data
         localStorage.setItem('user', JSON.stringify(data.user));
         // Update local state immediately
         setCurrentUser(data.user);
+        onUpdate?.(data.user);
         setOtpVerification({ show: false, field: '', otp: '', newValue: '' });
         setEditMode({ ...editMode, [otpVerification.field]: false });
         setTimeout(() => setSuccess(''), 3000);
       } else {
         setError(data.error || 'Failed to verify OTP');
       }
-    } catch (error) {
+    } catch {
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
@@ -252,7 +258,11 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
 
   // Change password function
   const handleChangePassword = async () => {
-    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+    if (
+      !passwordData.currentPassword ||
+      !passwordData.newPassword ||
+      !passwordData.confirmPassword
+    ) {
       setError('Please fill in all password fields');
       return;
     }
@@ -269,25 +279,26 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
 
     setLoading(true);
     setError('');
-    
+
     try {
       const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}/api/auth/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           currentPassword: passwordData.currentPassword,
-          newPassword: passwordData.newPassword
-        })
+          newPassword: passwordData.newPassword,
+        }),
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
+        onPasswordChanged?.();
         setSuccess('Password changed successfully!');
         setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
         setShowChangePassword(false);
@@ -295,7 +306,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
       } else {
         setError(data.error || 'Failed to change password');
       }
-    } catch (error) {
+    } catch {
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
@@ -312,32 +323,40 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
         month: 'long',
         day: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
       });
-    } catch (error) {
+    } catch {
       return 'Invalid date';
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Your profile"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
+    >
       <div className="bg-white dark:bg-accent-900 rounded-lg shadow-lg p-6 max-w-md w-full mx-auto my-8 animate-slide-up-modal max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-accent-900 dark:text-accent-100">
-            User Profile
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-accent-100 dark:hover:bg-accent-800 rounded-lg">
+          <h2 className="text-xl font-bold text-accent-900 dark:text-accent-100">User Profile</h2>
+          <button
+            aria-label="Close your profile"
+            onClick={onClose}
+            className="p-2 hover:bg-accent-100 dark:hover:bg-accent-800 rounded-lg"
+          >
             <XMarkIcon className="h-5 w-5 text-accent-500" />
           </button>
         </div>
-        
+
         {/* Error/Success Messages */}
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
-        
+
         {success && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
             <p className="text-sm text-green-600">{success}</p>
@@ -359,7 +378,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
                 value={otpVerification.otp}
                 onChange={(e) => {
                   const value = e.target.value.replace(/\D/g, '').slice(0, 6);
-                  setOtpVerification(prev => ({ ...prev, otp: value }));
+                  setOtpVerification((prev) => ({ ...prev, otp: value }));
                 }}
                 className="flex-1 px-3 py-2 border border-blue-300 rounded-lg text-center tracking-widest"
                 placeholder="000000"
@@ -393,7 +412,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
             </div>
           </div>
         )}
-        
+
         <div className="flex justify-center mb-6">
           <div className="relative">
             <UserCircleIcon className="h-20 w-20 text-accent-400" />
@@ -402,7 +421,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
             </div>
           </div>
         </div>
-        
+
         <div className="space-y-4">
           {/* Full Name - Editable */}
           <div className="bg-accent-50 dark:bg-accent-800 p-3 rounded-lg">
@@ -415,6 +434,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
               </div>
               {!editMode.name && (
                 <button
+                  aria-label="Edit name"
                   onClick={() => handleEdit('name')}
                   className="p-1 text-accent-500 hover:text-accent-700 hover:bg-accent-200 rounded"
                 >
@@ -432,6 +452,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
                   placeholder="Enter your name"
                 />
                 <button
+                  aria-label="Save name"
                   onClick={() => handleSaveField('name')}
                   disabled={loading}
                   className="p-1 text-green-600 hover:bg-green-100 rounded"
@@ -439,6 +460,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
                   <CheckIcon className="h-4 w-4" />
                 </button>
                 <button
+                  aria-label="Cancel editing name"
                   onClick={() => handleCancelEdit('name')}
                   className="p-1 text-red-600 hover:bg-red-100 rounded"
                 >
@@ -446,7 +468,9 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
                 </button>
               </div>
             ) : (
-              <p className="text-accent-900 dark:text-accent-100 font-medium">{userData.name || 'Not provided'}</p>
+              <p className="text-accent-900 dark:text-accent-100 font-medium">
+                {userData.name || 'Not provided'}
+              </p>
             )}
           </div>
 
@@ -461,6 +485,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
               </div>
               {!editMode.email && userData.email && (
                 <button
+                  aria-label="Edit email"
                   onClick={() => handleEdit('email')}
                   className="p-1 text-accent-500 hover:text-accent-700 hover:bg-accent-200 rounded"
                 >
@@ -478,6 +503,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
                   placeholder="Enter your email"
                 />
                 <button
+                  aria-label="Save email"
                   onClick={() => handleSaveField('email')}
                   disabled={loading}
                   className="p-1 text-green-600 hover:bg-green-100 rounded"
@@ -486,6 +512,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
                   <CheckIcon className="h-4 w-4" />
                 </button>
                 <button
+                  aria-label="Cancel editing email"
                   onClick={() => handleCancelEdit('email')}
                   className="p-1 text-red-600 hover:bg-red-100 rounded"
                 >
@@ -494,9 +521,12 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
               </div>
             ) : (
               <div className="flex items-center justify-between">
-                <p className="text-accent-900 dark:text-accent-100 font-medium">{userData.email || 'Not provided'}</p>
+                <p className="text-accent-900 dark:text-accent-100 font-medium">
+                  {userData.email || 'Not provided'}
+                </p>
                 {!userData.email && (
                   <button
+                    aria-label="Edit email"
                     onClick={() => handleEdit('email')}
                     className="text-sm text-blue-600 hover:text-blue-500"
                   >
@@ -518,6 +548,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
               </div>
               {!editMode.phone && userData.phone && (
                 <button
+                  aria-label="Edit phone"
                   onClick={() => handleEdit('phone')}
                   className="p-1 text-accent-500 hover:text-accent-700 hover:bg-accent-200 rounded"
                 >
@@ -535,6 +566,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
                   placeholder="Enter your phone number"
                 />
                 <button
+                  aria-label="Save phone"
                   onClick={() => handleSaveField('phone')}
                   disabled={loading}
                   className="p-1 text-green-600 hover:bg-green-100 rounded"
@@ -543,6 +575,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
                   <CheckIcon className="h-4 w-4" />
                 </button>
                 <button
+                  aria-label="Cancel editing phone"
                   onClick={() => handleCancelEdit('phone')}
                   className="p-1 text-red-600 hover:bg-red-100 rounded"
                 >
@@ -551,9 +584,12 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
               </div>
             ) : (
               <div className="flex items-center justify-between">
-                <p className="text-accent-900 dark:text-accent-100 font-medium">{userData.phone || 'Not provided'}</p>
+                <p className="text-accent-900 dark:text-accent-100 font-medium">
+                  {userData.phone || 'Not provided'}
+                </p>
                 {!userData.phone && (
                   <button
+                    aria-label="Edit phone"
                     onClick={() => handleEdit('phone')}
                     className="text-sm text-blue-600 hover:text-blue-500"
                   >
@@ -601,7 +637,9 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
               <label className="block text-sm font-medium text-accent-700 dark:text-accent-300 mb-1">
                 User ID
               </label>
-              <p className="text-xs text-accent-600 dark:text-accent-400 font-mono">#{userData.id}</p>
+              <p className="text-xs text-accent-600 dark:text-accent-400 font-mono">
+                #{userData.id}
+              </p>
             </div>
           )}
         </div>
@@ -626,29 +664,37 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
                   <input
                     type={showPasswords.current ? 'text' : 'password'}
                     value={passwordData.currentPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                    onChange={(e) =>
+                      setPasswordData({ ...passwordData, currentPassword: e.target.value })
+                    }
                     className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm"
                     placeholder="Enter current password"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                    onClick={() =>
+                      setShowPasswords({ ...showPasswords, current: !showPasswords.current })
+                    }
                     className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                   >
-                    {showPasswords.current ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                    {showPasswords.current ? (
+                      <EyeSlashIcon className="h-4 w-4" />
+                    ) : (
+                      <EyeIcon className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  New Password
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
                 <div className="relative">
                   <input
                     type={showPasswords.new ? 'text' : 'password'}
                     value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                    onChange={(e) =>
+                      setPasswordData({ ...passwordData, newPassword: e.target.value })
+                    }
                     className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm"
                     placeholder="Enter new password"
                   />
@@ -657,7 +703,11 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
                     onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
                     className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                   >
-                    {showPasswords.new ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                    {showPasswords.new ? (
+                      <EyeSlashIcon className="h-4 w-4" />
+                    ) : (
+                      <EyeIcon className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -670,16 +720,24 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
                   <input
                     type={showPasswords.confirm ? 'text' : 'password'}
                     value={passwordData.confirmPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                    onChange={(e) =>
+                      setPasswordData({ ...passwordData, confirmPassword: e.target.value })
+                    }
                     className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm"
                     placeholder="Confirm new password"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                    onClick={() =>
+                      setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })
+                    }
                     className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                   >
-                    {showPasswords.confirm ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                    {showPasswords.confirm ? (
+                      <EyeSlashIcon className="h-4 w-4" />
+                    ) : (
+                      <EyeIcon className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -694,7 +752,7 @@ const UserProfile = ({ isOpen, user, onClose, onLogout }) => {
             </div>
           )}
         </div>
-        
+
         <div className="mt-6 pt-6 border-t border-accent-200 dark:border-accent-700">
           <button
             onClick={onLogout}

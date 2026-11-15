@@ -1,16 +1,19 @@
+import useDialog from '../hooks/useDialog';
+import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) => {
-  const [currentMode, setCurrentMode] = useState(mode); // Local state for mode
+  const [currentMode, setCurrentMode] = useState(mode === 'signup' ? 'signup' : 'signin'); // Local state for mode
   const [currentStep, setCurrentStep] = useState('credentials'); // 'credentials' or 'otp'
   const [formData, setFormData] = useState({
     identifier: '', // Can be email or phone
     password: '',
     name: '', // Only for signup
-    otp: ''
+    otp: '',
   });
   const [showPassword, setShowPassword] = useState(false);
+  const dialogRef = useDialog(isOpen, onClose);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -19,8 +22,14 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
 
   // Reset mode when prop changes
   useEffect(() => {
-    setCurrentMode(mode);
-  }, [mode]);
+    setCurrentMode(mode === 'signup' ? 'signup' : 'signin');
+    setCurrentStep('credentials');
+    setFormData({ identifier: '', password: '', name: '', otp: '' });
+    setError('');
+    setSuccess('');
+    setCountdown(0);
+    setOtpSession(null);
+  }, [mode, isOpen]);
 
   useEffect(() => {
     if (countdown > 0) {
@@ -62,9 +71,9 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
@@ -103,7 +112,7 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
       if (currentMode === 'signin') {
         // For signin, use direct password authentication (no OTP)
         let endpoint, payload;
-        
+
         if (inputType === 'email') {
           endpoint = '/api/auth/login-email';
           payload = { email: formData.identifier, password: formData.password };
@@ -112,7 +121,7 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
           payload = { phoneNumber: formData.identifier, password: formData.password };
         }
 
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+        const apiUrl = API_BASE_URL;
         const response = await fetch(`${apiUrl}${endpoint}`, {
           method: 'POST',
           headers: {
@@ -127,13 +136,11 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
           setSuccess(data.message);
           localStorage.setItem('token', data.token);
           localStorage.setItem('user', JSON.stringify(data.user));
-          
-          setTimeout(() => {
-            onAuthSuccess(data.user, data.token);
-            handleClose();
-          }, 1000);
+
+          onAuthSuccess(data.user, data.token);
+          handleClose();
         } else {
-          setError(data.error || 'Authentication failed');
+          setError(data.message || data.error || 'Authentication failed');
         }
       } else {
         // For signup, send OTP first
@@ -150,29 +157,29 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
   // Send OTP for signup
   const handleSendOTP = async () => {
     const inputType = detectInputType(formData.identifier);
-    
+
     try {
       let endpoint, payload;
-      
+
       if (inputType === 'email') {
         // Send email OTP
         endpoint = '/api/auth/send-otp';
-        payload = { 
-          email: formData.identifier, 
-          name: formData.name, 
+        payload = {
+          email: formData.identifier,
+          name: formData.name,
           password: formData.password,
-          mode: 'signup' 
+          mode: 'signup',
         };
       } else {
         // Send mobile OTP
         endpoint = '/api/auth/send-mobile-otp';
-        payload = { 
-          phoneNumber: formData.identifier, 
-          action: 'register' 
+        payload = {
+          phoneNumber: formData.identifier,
+          action: 'register',
         };
       }
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}${endpoint}`, {
         method: 'POST',
         headers: {
@@ -188,14 +195,8 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
         setCurrentStep('otp');
         setCountdown(300); // 5 minutes
         setSuccess(`OTP sent to your ${inputType}`);
-        
-        // For development, log the OTP
-        if (data.otp || data.mockOtp) {
-          console.log('🔐 Development OTP:', data.otp || data.mockOtp);
-          setSuccess(`OTP sent! Development OTP: ${data.otp || data.mockOtp}`);
-        }
       } else {
-        setError(data.error || 'Failed to send OTP');
+        setError(data.message || data.error || 'Failed to send OTP');
       }
     } catch (error) {
       console.error('Send OTP Error:', error);
@@ -212,35 +213,35 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
     }
 
     const inputType = detectInputType(formData.identifier);
-    
+
     try {
       let endpoint, payload;
-      
+
       if (inputType === 'email') {
         // Verify email OTP
         endpoint = '/api/auth/verify-otp';
-        payload = { 
+        payload = {
           email: formData.identifier,
           otp: formData.otp,
           name: formData.name,
           password: formData.password,
-          mode: 'signup'
+          mode: 'signup',
         };
       } else {
         // Verify mobile OTP
         endpoint = '/api/auth/verify-mobile-otp';
-        payload = { 
+        payload = {
           sessionId: otpSession,
           otp: formData.otp,
           userData: {
             name: formData.name,
             email: null,
-            password: formData.password
-          }
+            password: formData.password,
+          },
         };
       }
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}${endpoint}`, {
         method: 'POST',
         headers: {
@@ -252,17 +253,12 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
       const data = await response.json();
 
       if (data.success) {
-        setSuccess(data.message + ' Please sign in to continue.');
-        
-        // For registration, redirect to signin instead of main page
-        setTimeout(() => {
-          resetForm();
-          setCurrentMode('signin');
-          setCurrentStep('credentials');
-          setSuccess('Registration successful! Please sign in with your credentials.');
-        }, 1500);
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        onAuthSuccess(data.user, data.token);
+        handleClose();
       } else {
-        setError(data.error || 'Invalid OTP');
+        setError(data.message || data.error || 'Invalid OTP');
       }
     } catch (error) {
       console.error('Verify OTP Error:', error);
@@ -273,7 +269,7 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
   };
 
   const getInputPlaceholder = () => {
-    return "Enter email or phone number";
+    return 'Enter email or phone number';
   };
 
   const getInputType = () => {
@@ -284,8 +280,14 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Authentication"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+    >
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-2xl font-bold text-gray-900">
@@ -293,6 +295,7 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
           </h2>
           <button
             onClick={handleClose}
+            aria-label="Close authentication dialog"
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <XMarkIcon className="h-5 w-5 text-gray-500" />
@@ -306,12 +309,13 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
               {/* Name field for signup */}
               {currentMode === 'signup' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                   <input
                     type="text"
+                    id="auth-name"
                     name="name"
+                    autoComplete="name"
+                    aria-label="Full Name"
                     value={formData.name}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
@@ -329,7 +333,10 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
                 <div className="relative">
                   <input
                     type="text"
+                    id="auth-identifier"
                     name="identifier"
+                    autoComplete="username"
+                    aria-label="Email or Phone Number"
                     value={formData.identifier}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 pr-20"
@@ -344,7 +351,7 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
                 </div>
                 {formData.identifier && (
                   <p className="text-xs text-gray-500 mt-1">
-                    {detectInputType(formData.identifier) === 'phone' && 
+                    {detectInputType(formData.identifier) === 'phone' &&
                       'Phone authentication with password'}
                   </p>
                 )}
@@ -352,13 +359,15 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
 
               {/* Password field */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
+                    id="auth-password"
                     name="password"
+                    autoComplete={currentMode === 'signin' ? 'current-password' : 'new-password'}
+                    aria-label="Password"
+                    maxLength={72}
                     value={formData.password}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
@@ -367,6 +376,7 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
                   />
                   <button
                     type="button"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                   >
@@ -381,7 +391,7 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
 
               {/* Error/Success Messages */}
               {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg">
                   <p className="text-sm text-red-600">{error}</p>
                 </div>
               )}
@@ -398,10 +408,13 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
                 disabled={loading}
                 className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? 'Processing...' : (
-                  currentMode === 'signin' ? 'Sign In' : 
-                  currentMode === 'signup' ? 'Send OTP' : 'Continue'
-                )}
+                {loading
+                  ? 'Processing...'
+                  : currentMode === 'signin'
+                    ? 'Sign In'
+                    : currentMode === 'signup'
+                      ? 'Send OTP'
+                      : 'Continue'}
               </button>
             </form>
           )}
@@ -409,32 +422,29 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
           {currentStep === 'otp' && (
             <div className="space-y-4">
               <div className="text-center mb-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Verify OTP
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Enter the verification code sent to
-                </p>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Verify OTP</h3>
+                <p className="text-sm text-gray-600">Enter the verification code sent to</p>
                 <p className="font-medium text-gray-900">{formData.identifier}</p>
                 {countdown > 0 && (
                   <p className="text-sm text-gray-500 mt-1">
-                    Resend in {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
+                    Resend in {Math.floor(countdown / 60)}:
+                    {(countdown % 60).toString().padStart(2, '0')}
                   </p>
                 )}
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    OTP Code
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">OTP Code</label>
                   <input
                     type="text"
                     name="otp"
+                    autoComplete="one-time-code"
+                    aria-label="Verification code"
                     value={formData.otp}
                     onChange={(e) => {
                       const value = e.target.value.replace(/\D/g, '').slice(0, 6);
-                      setFormData(prev => ({ ...prev, otp: value }));
+                      setFormData((prev) => ({ ...prev, otp: value }));
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-center text-2xl tracking-widest"
                     placeholder="000000"
@@ -445,7 +455,7 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
 
                 {/* Error/Success Messages */}
                 {error && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg">
                     <p className="text-sm text-red-600">{error}</p>
                   </div>
                 )}
@@ -499,7 +509,7 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
                 <button
                   onClick={() => {
                     // Handle forgot password
-                    console.log('Forgot password clicked');
+
                     // You can implement a forgot password modal or redirect
                   }}
                   className="text-sm text-gray-500 hover:text-gray-700 underline"
@@ -508,9 +518,9 @@ const EnhancedAuthModal = ({ isOpen, onClose, mode = 'signin', onAuthSuccess }) 
                 </button>
               </div>
             )}
-            
+
             <p className="text-sm text-gray-600">
-              {currentMode === 'signin' ? "Don't have an account? " : "Already have an account? "}
+              {currentMode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
               <button
                 onClick={() => {
                   resetForm();

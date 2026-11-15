@@ -10,25 +10,34 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
     recommendations = [],
     missingClauses = [],
     favorability = {},
-    processedAt = new Date()
+    processedAt = new Date(),
   } = documentData;
 
   const getRiskColor = (level) => {
     switch (level?.toLowerCase()) {
-      case 'low': return '#10B981';
-      case 'medium': return '#F59E0B';
-      case 'high': return '#EF4444';
-      default: return '#6B7280';
+      case 'low':
+        return '#10B981';
+      case 'medium':
+        return '#F59E0B';
+      case 'high':
+        return '#EF4444';
+      default:
+        return '#6B7280';
     }
   };
 
   const getSeverityColor = (severity) => {
     switch (severity?.toLowerCase()) {
-      case 'critical': return '#DC2626';
-      case 'high': return '#EF4444';
-      case 'medium': return '#F59E0B';
-      case 'low': return '#10B981';
-      default: return '#6B7280';
+      case 'critical':
+        return '#DC2626';
+      case 'high':
+        return '#EF4444';
+      case 'medium':
+        return '#F59E0B';
+      case 'low':
+        return '#10B981';
+      default:
+        return '#6B7280';
     }
   };
 
@@ -38,12 +47,8 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
       <div className="border-b-2 border-blue-600 pb-6 mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-blue-600 mb-2">
-              LegalEaseAI
-            </h1>
-            <p className="text-lg text-gray-600">
-              Legal Document Analysis Report
-            </p>
+            <h1 className="text-3xl font-bold text-blue-600 mb-2">LegalEaseAI</h1>
+            <p className="text-lg text-gray-600">Legal Document Analysis Report</p>
           </div>
           <div className="text-right">
             <div className="text-sm text-gray-500">
@@ -66,8 +71,8 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
             <strong>Document Name:</strong> {fileName}
           </div>
           <div>
-            <strong>Overall Risk Level:</strong> 
-            <span 
+            <strong>Overall Risk Level:</strong>
+            <span
               style={{ color: getRiskColor(overallRiskLevel) }}
               className="font-semibold ml-2 uppercase"
             >
@@ -91,13 +96,15 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
         <div className="bg-gray-50 p-4 rounded-lg">
           <h3 className="text-lg font-semibold mb-2">{summary.title || 'Document Analysis'}</h3>
           <p className="text-gray-700 mb-4">{summary.description || 'Analysis completed'}</p>
-          
+
           {summary.keyPoints && summary.keyPoints.length > 0 && (
             <div>
               <h4 className="font-semibold mb-2">Key Points:</h4>
               <ul className="list-disc pl-5 space-y-1">
                 {summary.keyPoints.map((point, index) => (
-                  <li key={index} className="text-gray-700">{point}</li>
+                  <li key={index} className="text-gray-700">
+                    {point}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -115,12 +122,12 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
             {redFlags.map((flag, index) => (
               <div key={index} className="border border-gray-300 rounded-lg p-4">
                 <div className="flex items-center mb-2">
-                  <div 
+                  <div
                     className="w-3 h-3 rounded-full mr-3"
                     style={{ backgroundColor: getSeverityColor(flag.severity) }}
                   ></div>
                   <h3 className="text-lg font-semibold">{flag.issue}</h3>
-                  <span 
+                  <span
                     className="ml-auto px-2 py-1 rounded text-xs font-semibold text-white"
                     style={{ backgroundColor: getSeverityColor(flag.severity) }}
                   >
@@ -156,20 +163,18 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-lg font-semibold">{clause.title}</h3>
                   <div className="flex items-center space-x-2">
-                    <span 
+                    <span
                       className="px-2 py-1 rounded text-xs font-semibold text-white"
                       style={{ backgroundColor: getRiskColor(clause.riskLevel) }}
                     >
                       {clause.riskLevel?.toUpperCase()} RISK
                     </span>
-                    <span 
-                      className="px-2 py-1 rounded text-xs font-semibold bg-gray-200 text-gray-800"
-                    >
+                    <span className="px-2 py-1 rounded text-xs font-semibold bg-gray-200 text-gray-800">
                       {clause.importance?.toUpperCase()}
                     </span>
                   </div>
                 </div>
-                
+
                 {clause.originalText && (
                   <div className="mb-3">
                     <strong>Original Text:</strong>
@@ -178,29 +183,29 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
                     </div>
                   </div>
                 )}
-                
+
                 <div className="mb-3">
                   <strong>Analysis:</strong> {clause.explanation}
                 </div>
-                
+
                 {clause.riskAssessment && (
                   <div className="mb-3">
                     <strong>Risk Assessment:</strong> {clause.riskAssessment}
                   </div>
                 )}
-                
+
                 {clause.legalImplications && (
                   <div className="mb-3">
                     <strong>Legal Implications:</strong> {clause.legalImplications}
                   </div>
                 )}
-                
+
                 {clause.negotiationPoints && (
                   <div className="mb-3">
                     <strong>Negotiation Points:</strong> {clause.negotiationPoints}
                   </div>
                 )}
-                
+
                 {clause.keyTerms && clause.keyTerms.length > 0 && (
                   <div>
                     <strong>Key Terms:</strong> {clause.keyTerms.join(', ')}
@@ -221,7 +226,9 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
           <div className="bg-blue-50 p-4 rounded-lg">
             <ul className="list-disc pl-5 space-y-2">
               {recommendations.map((rec, index) => (
-                <li key={index} className="text-gray-700">{rec}</li>
+                <li key={index} className="text-gray-700">
+                  {rec}
+                </li>
               ))}
             </ul>
           </div>
@@ -237,7 +244,9 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
           <div className="bg-yellow-50 p-4 rounded-lg">
             <ul className="list-disc pl-5 space-y-2">
               {missingClauses.map((clause, index) => (
-                <li key={index} className="text-gray-700">{clause}</li>
+                <li key={index} className="text-gray-700">
+                  {clause}
+                </li>
               ))}
             </ul>
           </div>
@@ -253,16 +262,12 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
           <div className="bg-purple-50 p-4 rounded-lg">
             <div className="grid grid-cols-2 gap-4 mb-3">
               <div>
-                <strong>Party 1 Favorability:</strong> 
-                <span className="ml-2 font-semibold capitalize">
-                  {favorability.forParty1}
-                </span>
+                <strong>Party 1 Favorability:</strong>
+                <span className="ml-2 font-semibold capitalize">{favorability.forParty1}</span>
               </div>
               <div>
-                <strong>Party 2 Favorability:</strong> 
-                <span className="ml-2 font-semibold capitalize">
-                  {favorability.forParty2}
-                </span>
+                <strong>Party 2 Favorability:</strong>
+                <span className="ml-2 font-semibold capitalize">{favorability.forParty2}</span>
               </div>
             </div>
             <div>
@@ -284,12 +289,8 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
             </p>
           </div>
           <div className="text-right">
-            <p className="text-sm text-gray-500">
-              LegalEaseAI © 2024
-            </p>
-            <p className="text-sm text-gray-500">
-              AI-Powered Legal Analysis
-            </p>
+            <p className="text-sm text-gray-500">LegalEaseAI © 2024</p>
+            <p className="text-sm text-gray-500">AI-Powered Legal Analysis</p>
           </div>
         </div>
       </div>
@@ -301,29 +302,33 @@ const PDFTemplate = React.forwardRef(({ documentData }, ref) => {
             font-size: 12px !important;
             line-height: 1.4 !important;
           }
-          
+
           h1 {
             font-size: 24px !important;
           }
-          
+
           h2 {
             font-size: 18px !important;
             page-break-after: avoid;
           }
-          
+
           h3 {
             font-size: 14px !important;
             page-break-after: avoid;
           }
-          
-          .border, .border-gray-300 {
+
+          .border,
+          .border-gray-300 {
             border: 1px solid #d1d5db !important;
           }
-          
-          .bg-gray-50, .bg-blue-50, .bg-yellow-50, .bg-purple-50 {
+
+          .bg-gray-50,
+          .bg-blue-50,
+          .bg-yellow-50,
+          .bg-purple-50 {
             background-color: #f9fafb !important;
           }
-          
+
           .page-break {
             page-break-before: always;
           }

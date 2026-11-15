@@ -1,20 +1,79 @@
-name: Backend authentication regressions
+name: Application verification
 on:
   push:
   pull_request:
 permissions:
   contents: read
 jobs:
-  auth-tests:
+  api:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: backend
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: legalease
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: legalease_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U legalease"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://legalease:ci-test-only@127.0.0.1:5432/legalease_test
+      ALLOW_TEST_DATABASE_RESET: '1'
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome
+      # The isolated CI renderer disables the sandbox; production defaults do not.
+      PDF_DISABLE_SANDBOX: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --ignore-scripts --no-audit --no-fund
-      - run: npm test
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm --prefix backend ci --ignore-scripts --no-audit --no-fund
+      - run: npm --prefix backend audit --audit-level=low
+      - run: npm --prefix backend test
+      - run: npm --prefix backend run test:integration
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: legalease
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: legalease_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U legalease"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://legalease:ci-test-only@127.0.0.1:5432/legalease_test
+      ALLOW_TEST_DATABASE_RESET: '1'
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE: /usr/bin/google-chrome
+      PDF_DISABLE_SANDBOX: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm --prefix backend ci --ignore-scripts --no-audit --no-fund
+      - run: npm audit --audit-level=low
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure-evidence
+          path: test-results/
+          retention-days: 3
