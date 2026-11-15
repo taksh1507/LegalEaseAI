@@ -35,3 +35,10 @@ No Python parsing failures detected in scanned source (files above 1 MB and bina
 ## Scope limits
 
 This is an initial static inventory, not a completed comprehensive audit. Live deployments, third-party accounts, data migrations, device behavior and visual layouts have not been verified. Historical secret scanning is not covered by this shallow clone. No performance improvement or production-readiness claim is made.
+
+## Follow-through
+
+The initial automated inventory above is historical triage, not the final scope.
+Its generic Python-parsing note is not meaningful validation for this JavaScript
+application. The completed source changes and PostgreSQL/browser evidence are
+recorded in [FINAL_IMPLEMENTATION_REPORT.md](FINAL_IMPLEMENTATION_REPORT.md).
